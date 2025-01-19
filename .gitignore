@@ -1,0 +1,16 @@
+# Ignore all .txt and .pickle files
+*.txt
+*.pickle
+
+# Ignore a specific output directory
+/code/outputs/
+
+# Ignore temporary files
+*.tmp
+*.log
+
+__pycache__/
+*.pyc
+*.pyo
+
+/venv/
