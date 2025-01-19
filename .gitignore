@@ -4,6 +4,7 @@
 
 # Ignore a specific output directory
 /code/outputs/
+/code/pickle
 
 # Ignore temporary files
 *.tmp
