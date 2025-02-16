@@ -1,6 +1,7 @@
 # Ignore all .txt and .pickle files
 *.txt
 *.pickle
+*.png
 
 # Ignore a specific output directory
 /code/outputs/
