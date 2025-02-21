@@ -49,7 +49,7 @@ def haploid_se(params):
         freqs[t+1] = curr_q*(1-s)/w_bar
         wtfreqs[t+1] = 1-freqs[t+1]
 
-        if freqs[t+2] > 1 or math.isclose(freqs[t+1], 1) or math.isclose(freqs[t+1], 0) or math.isclose(curr_q, freqs[t+1], rel_tol=1e-5):
+        if freqs[t+1] > 1 or math.isclose(freqs[t+1], 1) or math.isclose(freqs[t+1], 0) or math.isclose(curr_q, freqs[t+1], rel_tol=1e-5):
             final = t+2
             break
 

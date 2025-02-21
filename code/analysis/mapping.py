@@ -10,21 +10,23 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils import load_pickle
 from models import haploid
 
+def loadStability(currH):
+    return load_pickle(f"h{currH}_gametic_stability_res.pickle")
+
+def loadGres(currH):
+    '''
+    remember to change filename in getDiff before run map
+    '''
+    return load_pickle(f"h{currH}_allgdresG.pickle")
+
 def f(ngd_s, ngd_h, s, c, h, params):
-    gd_results = load_pickle("allgdres001G.pickle")
+    gd_results = loadGres(h)
     gd_configs, gd_res = gd_results[0], gd_results[1]
     gd_curve = gd_res[(s, c, h)]['q']
-
-    # if doing diploid mapping:
+    f = 0
     ngd_curve = wm(ngd_s, ngd_h, params['target_steps'], params['q0'])['q']
 
-    if len(gd_curve) < len(ngd_curve):
-        gd_curve = np.append(gd_curve, [gd_curve[-1]] * (len(ngd_curve) - len(gd_curve)))
-    else:
-        ngd_curve = np.append(ngd_curve, [ngd_curve[-1]] * (len(gd_curve) - len(ngd_curve)))
-    for i in range (len(gd_curve)):
-        f += (gd_curve[i] - ngd_curve[i]) ** 2
-    return f**0.5
+    return euclidean(ngd_curve, gd_curve)
 
 def optimization(ngd_s, s, c, gd_h, params):
     N = 0
@@ -76,7 +78,7 @@ def optimization_s(ngd_s, s, c, gd_h, params):
     
     return curr_s
 
-def opt_r(F, grad_F, vars, s, c, h, params, alpha=1e-4, beta=0.5, r_init=1.0):
+def opt_r(F, grad_F, vars, s, c, h, params, alpha=1e-4, beta=0.9, r_init=1.0):
     r = r_init
     while True:
         new_vars = vars - r * grad_F
@@ -87,7 +89,7 @@ def opt_r(F, grad_F, vars, s, c, h, params, alpha=1e-4, beta=0.5, r_init=1.0):
 
 ### gradient haploid helper functions ##########################################################
 def f_hap(ngd_s, s, c, h, params):
-    gd_results = load_pickle("allgdres001G.pickle")
+    gd_results = loadGres(h)
     gd_configs, gd_res = gd_results[0], gd_results[1]
     gd_curve = gd_res[(s, c, h)]['q']
 
@@ -95,16 +97,9 @@ def f_hap(ngd_s, s, c, h, params):
     params['s'] = ngd_s
     ngd_curve = haploid(params)['q']
     f = 0
+    return euclidean(ngd_curve, gd_curve)
 
-    if len(gd_curve) < len(ngd_curve):
-        gd_curve = np.append(gd_curve, [gd_curve[-1]] * (len(ngd_curve) - len(gd_curve)))
-    else:
-        ngd_curve = np.append(ngd_curve, [ngd_curve[-1]] * (len(gd_curve) - len(ngd_curve)))
-    for i in range (len(gd_curve)):
-        f += (gd_curve[i] - ngd_curve[i]) ** 2
-    return f**0.5
-
-def opt_r_hap(F, grad_F, vars, s, c, h, params, alpha=1e-4, beta=0.5, r_init=1.0):
+def opt_r_hap(F, grad_F, vars, s, c, h, params, alpha=1e-4, beta=0.0099, r_init=0.1):
     r = r_init
     while True:
         new_vars = vars - r * grad_F
@@ -113,14 +108,12 @@ def opt_r_hap(F, grad_F, vars, s, c, h, params, alpha=1e-4, beta=0.5, r_init=1.0
             return r
         r *= beta
 
-### gradient haploid helper functions ##########################################################
+### gradient haploid & diploid functions ##########################################################
 
-def gradient(s, c, h, params):
-    ngd_s = s
-    ngd_h = h
+def gradient(ngd_s, ngd_h, s, c, h, params):
     vars = np.array([ngd_s, ngd_h])
     delta = 0.001
-    iterations = 1000
+    iterations = 500
     grad_F = np.zeros(len(vars))
     F = 0
     prev_F = F+10
@@ -128,7 +121,7 @@ def gradient(s, c, h, params):
     for i in range(iterations):
         print('iteration', i, s, c, h)
         F = f(vars[0], vars[1], s, c, h, params)
-        if abs(F - prev_F) < 1e-8:
+        if abs(F - prev_F) < 1e-10:
             print("Stopping: function change is too small.")
             break
         for var_i in range(len(vars)):
@@ -158,11 +151,10 @@ def gradient(s, c, h, params):
         print('2nd', F, vars)
     return vars
 
-def hap_gradient(s, c, h, params):
-    ngd_s = s
+def hap_gradient(ngd_s, s, c, h, params):
     vars = np.array([ngd_s])
     delta = 0.001
-    iterations = 1000
+    iterations = 500
     grad_F = np.zeros(len(vars))
     F = 0
     prev_F = F+10
@@ -202,11 +194,12 @@ def hap_gradient(s, c, h, params):
 def hap_mapping(params):
     seffMap = dict()
     hapMappedCurves = []
-    f_out = open('hap_grid_G_fix_map.txt', 'w')
+    f_out = open(f"h{params['h']}_hap_grid_G_fix_map.txt", 'w')
     f_out.write(f"Gene Drive Configuration\t\ts in haploid ngd population\n")
 
-    gd_results = load_pickle("allgdres001G.pickle")
+    gd_results = loadGres(params['h'])
     gd_configs, gd_res = gd_results[0], gd_results[1]
+    stabilityRes = loadStability(params['h'])
     # print('params', gd_configs)
 
     hap_results = load_pickle("allhapresG.pickle")
@@ -214,7 +207,8 @@ def hap_mapping(params):
     for (s, c, h) in gd_configs:
         # only testing for s = 0.4, c=0.6
         # if math.isclose(s, 0.4) and math.isclose(c, 0.6):
-        if gd_res[(s, c, h)]['state'] == 'fix':
+        # if gd_res[(s, c, h)]['state'] == 'fix':
+        if ((s, c, h), 1.0) in stabilityRes['Fixation']:
             gd_curve = gd_res[(s, c, h)]['q']
             best_diff = 10000
             best_s = None
@@ -225,14 +219,8 @@ def hap_mapping(params):
                 if diff < best_diff:
                     best_diff = diff
                     best_s = ngd_key
-                    
-        
-        # gradient descent or newton_raphson
-            print('before gradient:', best_s)
 
-            # best_vars = gradient(best_s, s, c, h, params)
-            # best_s = best_vars[0]
-            # best_s = optimization_s(best_s, s, c, h, params)
+            print('before gradient:', best_s)
 
             ### haploid
             hap_params = {'s': best_s, 'q0': params['q0'], 'target_steps': params['target_steps']}
@@ -247,27 +235,25 @@ def hap_mapping(params):
 def hap_gradient_mapping(params):
     seffMap = dict()
     hapMappedCurves = []
-    f_out = open('hap_gradient_G_fix_map.txt', 'w')
+    f_out = open(f"h{params['h']}_hap_gradient_G_fix_map.txt", 'w')
     f_out.write(f"Gene Drive Configuration\t\ts in haploid ngd population\n")
 
-    gd_results = load_pickle("allgdresG.pickle")
+    gd_results = loadGres(params['h'])
     gd_configs, gd_res = gd_results[0], gd_results[1]
     # print('params', gd_configs)
-
-    hap_results = load_pickle("allhapresG.pickle")
+    stabilityRes = loadStability(params['h'])
+    grid_results = load_pickle(f"h{params['h']}_hap_grid_G_fix.pickle")
 
     for (s, c, h) in gd_configs:
         # only testing for s = 0.4, c=0.6
-        # if math.isclose(s, 0.4) and math.isclose(c, 0.6):
-        if gd_res[(s, c, h)]['state'] == 'fix':
+        # if math.isclose(s, 0.8) and math.isclose(c, 0.9):
+        if ((s, c, h), 1.0) in stabilityRes['Fixation']:
             gd_curve = gd_res[(s, c, h)]['q']
             best_diff = 10000
-            best_s = None
-    
-        
-        # gradient descent or newton_raphson
+            best_s = grid_results['map'][(s, c, h)]
 
-            best_vars = hap_gradient(s, c, h, params)
+        # gradient descent or newton_raphson
+            best_vars = hap_gradient(best_s, s, c, h, params)
             best_s = best_vars[0]
 
             ### haploid
@@ -281,13 +267,13 @@ def hap_gradient_mapping(params):
     return {'map': seffMap, 'ngC': hapMappedCurves}
 
 #### grid search only ################
-def grid_mapping():
+def grid_mapping(params):
     seffMap = dict()
     ngd_mapped = []
     f_out = open('outputs/grid_G_h0_s02c03.txt', 'w')
     f_out.write(f"Gene Drive Configuration\t\t(s, h) in NGD population (S_Effective)\n")
 
-    gd_results = load_pickle("allgdres001G.pickle")
+    gd_results = loadGres(params['h'])
     gd_configs, gd_res = gd_results[0], gd_results[1]
 
     ngd_results = load_pickle("allngdres.pickle")
@@ -320,22 +306,21 @@ def grid_mapping():
 def gradient_mapping(params):
     seffMap = dict()
     wms = []
-    f_out = open('outputs/grad_G_h0_fix.txt', 'w')
+    f_out = open(f"h{params['h']}_grad_G_fix.txt", 'w')
     f_out.write(f"Gene Drive Configuration\t\t(s, h)in NGD population\n")
 
-    gd_results = load_pickle("allgdres001G.pickle")
+    gd_results = loadGres(params['h'])
     gd_configs, gd_res = gd_results[0], gd_results[1]
-    print('params', gd_configs)
-
-    with open('pickle/allngdres.pickle', 'rb') as f1:
-        wm_results = pickle.load(f1)
+    stabilityRes = loadStability(params['h'])
+    grid_results = load_pickle(f"h{params['h']}_hap_grid_G_fix.pickle")
 
     for (s, c, h) in gd_configs:
-        # if math.isclose(s, 0.4) and math.isclose(c, 0.6):
-        if s < c:
+        # if math.isclose(s, 0.8) and math.isclose(c, 0.9):
+        if ((s, c, h), 1.0) in stabilityRes['Fixation']:
             gd_curve = gd_res[(s, c, h)]['q']
             best_diff = 10000
-            best_s = None
+            best_s = grid_results['map'][(s,c,h)]
+            print('before gradient', best_s)
             best_h = h
         
             # for ngd_key, ngd_curve in wm_results.items():
@@ -347,7 +332,7 @@ def gradient_mapping(params):
         
         # gradient descent or newton_raphson
 
-            best_vars = gradient(s, c, h, params)
+            best_vars = gradient(best_s, best_h, s, c, h, params)
             best_s, best_h = best_vars[0], best_vars[1]
             # best_s = optimization_s(best_s, s, c, h, params)
             # best_h = optimization(best_s, s, c, h, params)
