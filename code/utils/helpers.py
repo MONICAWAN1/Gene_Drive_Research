@@ -1,6 +1,6 @@
 import numpy as np
 
-def isclose(a, b, rel_tol=1e-9, abs_tol=0.0):
+def isclose(a, b, rel_tol=1e-7, abs_tol=0.0):
     return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
 #### Euclidean distance formula #############################
@@ -15,7 +15,7 @@ def euclidean(result1, result2):
 
     for i in range(len(q0)):
         diff1 += (q0[i]-q0_m[i])**2
-    return diff1**0.5
+    return diff1/max(len(q0), len(q0_m))
 
 def at_eq(freqs):
     differences = [abs(freqs[i+1] - freqs[i]) for i in range(len(freqs)-1)]

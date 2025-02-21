@@ -8,21 +8,50 @@ import pickle
 from models import run_model, wm, haploid_se
 from utils import export_legend, euclidean, load_pickle, save_pickle
 
+def loadGrad():
+    return load_pickle(f"h0.0_hap_gradient_G_fix.pickle")
+
 colormaps = ['Greys', 'Reds', 'YlOrBr', 'Oranges', 'PuRd', 'BuPu',
                       'GnBu', 'YlGnBu', 'PuBuGn', 'Greens']
 
-diffmap1 = load_pickle("mappingdiff.pickle")
-diffmap2 = load_pickle("mappingdiff_grid.pickle")
-diffmap3 = load_pickle("mappingdiff_grid_hap.pickle")
-diffmap5 = load_pickle("mappingdiff_gdhapse.pickle")
-diffmap6 = load_pickle("mappingdiff_gdhapse_h05.pickle")
-diffmap7 = load_pickle("h05_mappingdiff_grid_hap.pickle")
+diffmap5 = load_pickle("h0.0_mappingdiff_gradient.pickle")
+diffmap6 = load_pickle("h0.0_mappingdiff_hap_grid.pickle")
 # print(diffmap1, '\n', diffmap2)
 
-all_values = list(diffmap3.values()) + list(diffmap5.values())
+all_values = list(diffmap5.values()) + list(diffmap6.values())
 min_val = min(all_values)
-max_val = max(all_values)
+max_val = max(all_values + [0.004104875496903301])
 print(min_val, max_val)
+
+'''
+Plot error vs h for a specific configuration
+'''
+def plot_errorh(h):
+    hapse_errors = []
+    hapgrid_errors = []
+    s = 0.8
+    c = 0.9
+    h_range = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    for h in h_range:
+        hapseDiff = load_pickle(f"h{h}_mappingdiff_gdhapse.pickle")
+        hapgridDiff = load_pickle(f"h{h}_mappingdiff_hap_grid.pickle")
+        # print(list(hapseDiff.keys()))
+        hapse_errors.append(hapseDiff[(s, c, h)])
+        hapgrid_errors.append(hapgridDiff[(s, c, h)])
+
+    
+    plt.figure(figsize=(8, 6))
+    plt.plot(h_range, hapse_errors, label = "Haploid_Se Model")
+    plt.plot(h_range, hapgrid_errors, label = "Grid Search Haploid")
+
+    plt.xlabel('h', fontsize = 14)
+    plt.ylabel('MSE between Gene-Drive curve and Mapped curve', fontsize = 14)
+    plt.title(f'Change in Mapping Error over H at S = {s}, C = {c}')
+    plt.legend(title='Mapping Method', bbox_to_anchor=(1, 1.05), loc='upper left')
+    plt.tight_layout()
+
+    plt.show()
+        
 
 ### plot simple dynamics for gd and non gd ################
 def plot_ngd(s, steps, init):
@@ -115,22 +144,17 @@ def derivative_plot(params, gd_configs, fitting_res):
     plt.show()
 
 
-def plotMapDiff():
-    gd_results = load_pickle("h05_allgdres001G.pickle")
+def plotMapDiff(currH):
+    gd_results = load_pickle(f"h{currH}_allgdresG.pickle")
     gd_configs, gd_res = gd_results[0], gd_results[1]
-    # with open('pickle/hap_grid_gametic_fix_results.pickle', 'rb') as f:
-    #     mapResult = pickle.load(f)
+    stabilityRes = load_pickle(f"h{currH}_gametic_stability_res.pickle")
 
-    # the hap_se results
-    mapResult = load_pickle("allhapseres001G.pickle")
-
-    # print(mapResult)
-    # sMap, wms = mapResult['map'], mapResult['q']
     gds = [res['q'] for res in gd_res.values()]
 
     valid_configs = []
     for (s, c, h) in gd_configs:
-        if gd_res[(s,c,h)]['state']=='fix':
+        # if ((s, c, h), 1.0) in stabilityRes['Fixation']: ### NEED TO USE ANALYTICAL BOUNDS
+        if gd_res[(s, c, h)]['state'] == 'fix':
             valid_configs.append((s, c, h))
 
     all_s = sorted(set(s for (s,c,h) in valid_configs))
@@ -147,40 +171,44 @@ def plotMapDiff():
         gd_curve = gds[idx]
 
         # plot haploid using Se
-        paramSe = {'s':s, 'c':c, 'n': 500, 'h': 0, 'target_steps': 40000, 'q0': 0.001}
+        paramSe = {'s':s, 'c':c, 'n': 500, 'h':h, 'target_steps': 40000, 'q0': 0.001}
         hapSe = haploid_se(paramSe)['q']
 
-        curveDiff = euclidean(gd_curve, hapSe)/min(len(hapSe), len(gd_curve))
+        curveDiff = euclidean(gd_curve, hapSe)
         row_idx = all_s.index(s)
         col_idx = all_c.index(c)
         diff_map[row_idx, col_idx] = curveDiff
         saved[(s, c, h)] = curveDiff
 
-    # save_pickle("mappingdiff_gdhapse_h05.pickle", saved)
+    save_pickle(f"h{currH}_mappingdiff_gdhapse01.pickle", saved)
 
     X, Y = np.meshgrid(all_c, all_s)
-    cmap = plt.get_cmap('YlOrBr')
+    cmap = plt.get_cmap('BuPu')
     cmap.set_bad('white')
 
     # Define min and max values for color normalization
     vmin, vmax = min_val, max_val
-    # vmin, vmax = np.nanmin(diff_map), np.nanmax(diff_map)
+    vmin2, vmax2 = np.nanmin(diff_map), np.nanmax(diff_map)
+    print(vmin2, vmax2)
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
 
     plt.figure(figsize=(10, 6))
     mesh = plt.pcolormesh(X, Y, diff_map, shading='auto', cmap=cmap, norm=norm)
     cbar = plt.colorbar(mesh)
-    cbar.set_label('Difference (mapped vs. hapSe)')
+    cbar.set_label('Difference')
 
-    plt.xlabel('c')
-    plt.ylabel('s')
-    plt.title('Difference Heatmap: GD vs. Haploid Se at h = 0.5')
+    plt.xlabel('c', fontsize = 15)
+    plt.ylabel('s', fontsize = 15)
+    plt.title(f'Difference Heatmap: GD vs. Haploid Se at h = {currH}')
     plt.show()
 
 
 # sweep through all configurations, get final state
 # partition graph (fixed h, x is c, y is s, color indicates s-eff/final state in gd simulation)
 def partition():
+    '''
+    Partition plot of final state based on simulation
+    '''
     # loading
     # with open('pickle/sch_to_s_results.pickle', 'rb') as f:
     #     map_results = pickle.load(f)
@@ -233,12 +261,14 @@ def partition():
     # Show plot
     plt.show()
 
-# mapping curves of ngd and gd populations ###########
-def plot_mapping():
+'''
+mapping curves of ngd and gd populations for a single configuration
+'''
+def plot_mapping(currH):
     # loading results
-    gd_results = load_pickle("allgdres001G.pickle")
-    gradResult = load_pickle("grad_gametic_fix_results.pickle") # all gradient results
-    gridResult = load_pickle("hap_grid_gametic_fix.pickle") # all gradient results
+    gd_results = load_pickle(f"h{currH}_allgdres001G.pickle")
+    gradResult = load_pickle(f"h{currH}_s0.8_c0.9_gradient_G_fix.pickle") # all gradient results
+    gridResult = load_pickle(f"h{currH}_hap_grid_G_fix.pickle") # all hap grid results
 
 
     gd_configs, gd_res = gd_results[0], gd_results[1]
@@ -246,33 +276,35 @@ def plot_mapping():
     sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
     sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
 
-    gd_configs = [key for key in sMap_grid]
+    # gd_configs = [key for key in sMap_grid]
     # print(gd_configs)
 
     plt.figure(figsize = (15, 7))
 
-    for i in range(len(gd_configs)):
-        s, c, h = gd_configs[i]
-        if (math.isclose(s, 0.2) and math.isclose(c, 0.8)):
+    for (s, c, h) in gd_configs:
+        if (math.isclose(s, 0.8) and math.isclose(c, 0.9)):
         # if s < c and math.isclose(s, 0.1):
             best_s_grid = sMap_grid[(s, c, h)]
+            # best_s_grad = sMap_grad[(s, c, h)]
             # best_h_grid = sMap_grid[(s, c, h)][1]
-            # best_s_grad, best_h_grad = sMap_grad[(s, c, h)][0], sMap_grad[(s, c, h)][1]
+            best_s_grad, best_h_grad = sMap_grad[(s, c, h)][0], sMap_grad[(s, c, h)][1]
             # print(best_s_grid)
 
             # cmap = plt.get_cmap(colormaps[i % len(colormaps)])
             cmap = plt.get_cmap("Reds")
             gd_color = cmap(c) # original gene-drive curve
-            cmap1 = plt.get_cmap('PuRd')
+            cmap1 = plt.get_cmap('YlOrBr')
             w_color1 = cmap1(abs(best_s_grid)) # gradient mapping curves
+            w_color1 = 'y'
 
-            # cmap2 = plt.get_cmap('GnBu') # grid mapping curves
+            cmap2 = plt.get_cmap('GnBu') # grid mapping curves
             # w_color2 = cmap2(abs(best_s_grad))
+            w_color2 = "b"
 
             paramSe = {'s':s, 'c':c, 'n': 500, 'h': 0, 'target_steps': 40000, 'q0': 0.001}
             hapSe = haploid_se(paramSe)['q']
 
-            cmapSe = plt.get_cmap("GnBu")
+            cmapSe = plt.get_cmap("Greens")
             se_color = cmapSe(c) # original gene-drive curve
 
             # nearby = []
@@ -282,19 +314,19 @@ def plot_mapping():
             #     time = np.arange(0, len(newc))
             #     h_color = cmap2(abs(hnew-best_h_grid)*4)
             #     plt.plot(time, newc, marker = 'o', color = h_color, markersize=3, linestyle = '-', label = f"NGD s = {'%.3f' % best_s_grid}, h = {'%.3f' % hnew}")      
-
-            # wm_curve_grid = wms_grid[i]
-            # wm_curve_grad = wms_grad[i]
+            i = list(sMap_grid.keys()).index((s, c, h))
+            wm_curve_grid = wms_grid[i]
+            wm_curve_grad = wm(best_s_grad, best_h_grad, 40000, 0.001)['q']
             # print(wm_curve_grid)
             # print(wm_curve)
-            # time1 = np.arange(0, len(wm_curve_grid))
-            # time2 = np.arange(0, len(wm_curve_grad))
+            time1 = np.arange(0, len(wm_curve_grid))
+            time2 = np.arange(0, len(wm_curve_grad))
             time = np.arange(0, len(gd_res[(s, c, h)]['q']))
             time_se = np.arange(0, len(hapSe))
             time3 = np.arange(0, len(gd_res[(s, c, h)]['q'])-1)
             print("plotting gd and mapped curves")
-            # plt.plot(time1, wm_curve_grid, marker = 'o', color = w_color1, markersize=3, linestyle = '-', label = f'grid mapped haploid NGD s = {best_s_grid}')
-            # plt.plot(time2, wm_curve_grad, marker = 's', color = w_color2, markersize=3, linestyle = '-', label = f'gradient mapped NGD s = {best_s_grad}, h = {best_h_grad}')
+            plt.plot(time1, wm_curve_grid, marker = 'o', color = w_color1, markersize=3, linestyle = '-', label = f'grid search haploid NGD s = {best_s_grid}')
+            plt.plot(time2, wm_curve_grad, marker = 's', color = w_color2, markersize=3, linestyle = '-', label = f'gradient descent diploid NGD s = {best_s_grad}, h = {best_h_grad}')
             plt.plot(time, gd_res[(s, c, h)]['q'], color = gd_color, label = f"s = {s}, c = {c}, h = {h}")
             plt.plot(time_se, hapSe, marker = 'o', color = se_color, markersize=3, label = f"haploid using Se")
             # plt.plot(time3, gd_res[(s, c, h)]['w_bar'], color = 'b', label = f"wbar for s = {s}, c = {c}, h = {h}")
@@ -303,8 +335,8 @@ def plot_mapping():
     # plt.figtext(0.6, 0.2, f"Parameters:\n{param_text}", bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="black"))
     plt.ylabel('Gene Drive/Mutant Allele Frequency', fontsize=12)
     plt.xlabel('Time', fontsize=12)
-    plt.title("Comparison of gene drive and haploid Se results at h = 0.5")
-    plt.tight_layout(rect=[0, 0, 0.75, 1])
+    plt.title(f"Comparison of gene drive and haploid Se results at h = {currH}")
+    plt.tight_layout(rect=[0, 0, 0.7, 1])
     plt.grid(True)
     legend = plt.legend(title='population condition', bbox_to_anchor=(1, 1.05), loc='upper left')
     export_legend(legend)
@@ -313,10 +345,11 @@ def plot_mapping():
 
 
 
-def ploterror():
+def ploterror(currH):
     # mappingdiff: (s,c,h): error of map
 
-    diffmap = load_pickle("h05_mappingdiff_grid_hap.pickle")
+    diffmap = load_pickle(f"h{currH}_mappingdiff_gradient.pickle")
+    print(f"in ploterror: {currH}\n{diffmap}")
 
     # with open('pickle/mappingdiff_grid.pickle', 'rb') as f:
     #     diffmap = pickle.load(f)
@@ -324,9 +357,9 @@ def ploterror():
     # print(diffmap)
     ngd_s = sorted(set([conf[0] for conf in diffmap.keys()]))
     ngd_c = sorted(set([conf[1] for conf in diffmap.keys()]))
-    print(ngd_s,ngd_c)
-    print(len(ngd_s), len(ngd_c))
-    errors = np.zeros((len(ngd_s), len(ngd_c)))
+    # print(ngd_s,ngd_c)
+    # print(len(ngd_s), len(ngd_c))
+    errors = np.full((len(ngd_s), len(ngd_c)), np.nan)
 
     for (s, c, h), error in diffmap.items():
         # print(s, c, h)
@@ -336,6 +369,7 @@ def ploterror():
             errors[i, j] = error
     
     # print(errors)
+    print(min(diffmap.values()), max(diffmap.values()))
 
     # Create the heatmap
     plt.figure(figsize=(10, 8))
@@ -346,12 +380,12 @@ def ploterror():
         origin='lower',
         extent=[min(ngd_s), max(ngd_s), min(ngd_c), max(ngd_c)],
         vmin=min_val,            # set color scale min
-        vmax=max_val             # set color scale max
+        vmax=max_val            # set color scale max
     )
-    plt.colorbar(label='Euclidean Distance (Error of mapping)')
-    plt.xlabel('c in gene drive')
-    plt.ylabel('s in gene drive')
-    plt.title(f"Error Heatmap for the Grid Mapping from Gene-Drive to Non-Gene-Drive Haploid Model at h = 0.5")
+    plt.colorbar(label='Mean Squared Error (Error of mapping)')
+    plt.xlabel('c in gene drive', fontsize = 15)
+    plt.ylabel('s in gene drive', fontsize = 15)
+    plt.title(f"Mapping Error from Gene-Drive to Non-Gene-Drive Diploid Model at h = {currH} with Gradient Descent")
     plt.show()
 
 
