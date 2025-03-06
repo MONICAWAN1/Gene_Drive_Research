@@ -23,7 +23,7 @@ def wm(s, h, target_steps, q_init):
         if math.isclose(q_freqs[t+1], 1) or math.isclose(q_freqs[t+1], 0) or math.isclose(curr_q, q_freqs[t+1], rel_tol=1e-5):
             final = t+1
             break
-    return {'p': p_freqs[:final], 'q': q_freqs[:final], 'w_bar': w[:final-1]}
+    return {'q': q_freqs[:final], 'w_bar': w[:final-1]}
 
 
 
@@ -56,7 +56,7 @@ def haploid_se(params):
     state = checkState(final, freqs, params)
     if state == None: print('none', freqs[t], freqs[t+1])
 
-    return {'q': freqs[:final], 'p': wtfreqs[:final], 'w_bar': w[:final-1], 'state': state}
+    return {'q': freqs[:final], 'w_bar': w[:final-1], 'state': state}
 
 # ngd haploid without se
 def haploid(params):

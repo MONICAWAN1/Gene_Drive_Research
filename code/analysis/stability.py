@@ -168,7 +168,7 @@ def plot_regions(allres, state, conversion):
 def main():
     s=0.6
     c=0.6
-    h=0.5
+    h=0.49
     q_init=0.001
     regime = 'Fixation'
     params = {'config':(s, c, h), 'q0':q_init, 'conversion': "gametic"}

@@ -22,20 +22,25 @@ def main():
     }
 
     if args.map_function in map_functions:
-        # print(f"Running {args.map_function}...")
-        # if args.map_function in map_functions:
-        #     params = {'n': 500, 'h': args.h, 'target_steps': 40000, 'q0': 0.001}
-        #     mapping_result = map_functions[args.map_function](params, args.gdFile)
-        # else:
-        #     print('NOT IN MAP_FUNCTIONS', args.map_function)
-        #     mapping_result = map_functions[args.map_function]()
-        # print('Running and saving the mapping results...')
+        print(f"Running {args.map_function}...")
+        if '0001' in args.gdFile:
+            label='0001'
+        elif '001' in args.gdFile:
+            label='001'
+        else:
+            label=''
 
-        # is001 = '001' if '001' in args.gdFile else ''
+        if args.map_function in map_functions:
+            params = {'n': 500, 'h': args.h, 'target_steps': 40000, 'q0': 0.001}
+            mapping_result = map_functions[args.map_function](params, label)
+        else:
+            print('NOT IN MAP_FUNCTIONS', args.map_function)
+            mapping_result = map_functions[args.map_function]()
+        print('Running and saving the mapping results...')
 
-        # save_pickle(f"h{args.h}_{args.map_function}{is001}_G_fix.pickle", mapping_result)
+        save_pickle(f"h{args.h}_{args.map_function}{label}_G_fix.pickle", mapping_result)
 
-        getdiff(args.h, args.map_function, args.gdFile)
+        getdiff(args.h, args.map_function, label)
     else:
         print(f"Error: {args.map_function} is not a valid mapping function.")
 
