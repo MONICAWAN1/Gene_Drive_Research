@@ -38,9 +38,12 @@ def main():
             mapping_result = map_functions[args.map_function]()
         print('Running and saving the mapping results...')
 
-        save_pickle(f"h{args.h}_{args.map_function}{label}_G_fix.pickle", mapping_result)
+        # save_pickle(f"h{args.h}_{args.map_function}{label}_G_fix.pickle", mapping_result)
 
-        getdiff(args.h, args.map_function, label)
+        # DEBUGGING GRADIENT DESCENT
+        save_pickle(f"h{args.h}_{args.map_function}_G_fix.pickle", mapping_result)
+
+        # getdiff(args.h, args.map_function, label)
     else:
         print(f"Error: {args.map_function} is not a valid mapping function.")
 
