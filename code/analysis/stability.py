@@ -5,6 +5,82 @@ import matplotlib.colors as mcolors
 from matplotlib import cm
 import sys, os
 
+import sympy as sp
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from models import wm
+
+def compute_lambda():
+# Define symbols
+    q, s, h = sp.symbols('q s h')
+
+    # Define numerator and denominator
+    numerator = q**2 * (1 - s) + q * (1 - q) * (1 - h * s)
+    wbar = q**2 * (1 - s) + 2 * q * (1 - q) * (1 - h * s) + (1 - q)**2
+
+    # Define q(t+1)
+    q_next = numerator / wbar
+
+    # Compute the derivative ∂q(t+1)/∂q(t)
+    dq_next_dq = sp.simplify(sp.diff(q_next, q))
+
+    dq_dq_func = sp.lambdify((s, h, q), dq_next_dq, "numpy")
+
+    # Print the simplified result
+    sp.pprint(dq_next_dq)
+    return dq_dq_func
+
+def compute_lambda_gd():
+# Define symbols
+    s, c, h, q = sp.symbols('s c h q')
+
+    # Define numerator and denominator
+    sc = (1 - h*s) * c
+    sn = 0.5 * (1 - h * s) * (1 - c)
+    numerator = q**2 * (1 - s) + 2 * q * (1 - q) * c * (sc+sn)
+    wbar = q**2 * (1 - s) + 2 * q * (1 - q) * (sc+2*sn) + (1 - q)**2
+
+    # Define q(t+1)
+    q_next = numerator / wbar
+
+    # Compute the derivative ∂q(t+1)/∂q(t)
+    dq_next_dq = sp.simplify(sp.diff(q_next, q))
+
+    dq_dq_func = sp.lambdify((s, c, h, q), dq_next_dq, "numpy")
+
+    # Print the simplified result
+    sp.pprint(dq_next_dq)
+    return dq_dq_func
+
+def get_gd_stability(s, c, h, q, dfunc):
+    try:
+        slope = dfunc(s, c, h, q)
+    except ZeroDivisionError:
+        slope = 'NA'
+        print(f"Division by zero: config = {(s, h, q)}")
+    return slope
+
+def get_ngd_stability(s, h, q, dfunc):
+    try:
+        slope = dfunc(s, h, q)
+    except ZeroDivisionError:
+        slope = 'NA'
+        print(f"Division by zero: config = {(s, h, q)}")
+    return slope
+
+def get_ngd_stability_old(s, h, q):
+    num = 2*q**2*(1-q)*(1-s)*(1-h*s) - q**2*(1-2*q)*(1-s)*(1-h*s) + 2*q*(1-q)**2*(2-s-h*s) + (1-2*q)*(1-q)**2*(1-h*s)
+
+    denom = (q**2*(1-s) + 2*(1-q)*q*(1-h*s) + (1-q)**2)**2
+
+    if denom != 0:
+        slope = num/denom
+    else:
+        slope = 'NA'
+        print(f"no slope result, config = {(s, h, q)}")
+    
+    return slope
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from utils import load_pickle,save_pickle
@@ -49,6 +125,14 @@ def get_eq(params):
     eqs['q3'] = q3
     return eqs
 
+'''
+Given the NGD parameter (s, h), return the stable eq
+'''
+def get_eq_ngd(s, h):
+    if not math.isclose(h, 0.5):
+        return (h*s)/(2*h*s - s)
+    return 'NA'
+
 # get_eq({'config':(0.2, 0.8, 0), 'q0':0.001, 'conversion': "zygotic"})
 '''
 return allres: dict{"state": [(config1, eq), ...]}
@@ -56,14 +140,15 @@ return allres: dict{"state": [(config1, eq), ...]}
 def runall(params):
     allres = {'Stable': [], 'Unstable': [], 'dq=1': [], 'Fixation': [], 'Loss':[]}
     if params['conversion'] == 'zygotic':
-        g_res = load_pickle('allgdres001.pickle')
+        gdres_file = f"gd_simulation_results/h{params['config'][2]}_allgdres001.pickle"
     else:
-        g_res = load_pickle(f"h{params['config'][2]}_allgdres001G.pickle")
+        gdres_file = f"gd_simulation_results/h{params['config'][2]}_allgdres001G.pickle"
+    g_res = load_pickle(gdres_file)
     configs, res = g_res[0], g_res[1]
     print('allconfigs', configs[:2])
 
-    for s in np.arange(0.01, 1, 0.01):
-        for c in np.arange(0.01, 1, 0.01):
+    for s in np.arange(0.01, 1.01, 0.01):
+        for c in np.arange(0.01, 1.01, 0.01):
             h = params['config'][2]
             params['config'] = (round(float(s), 3),round(float(c), 3),round(float(h), 3))
 
@@ -94,6 +179,11 @@ def runall(params):
             # if math.isclose(s, 0.08) and math.isclose(c, 0.08):
             #     print('something eq3', eq3, math.isclose(eq3, 1))
             #     print(((s, c, h), eq3) in allres['Fixation'])
+            elif eq3 == 'NA':
+                if res[params['config']]['state'] == 'loss':
+                    allres['Loss'].append((params['config'], 0.0))
+                elif res[params['config']]['state'] == 'fix':
+                    allres['Fixation'].append((params['config'], 1.0))
 
         
     return allres
@@ -107,12 +197,13 @@ def plot_all(allres, conversion):
         c_values = [config[0][1] for config in unstable_configurations]  # Second element in the tuple (c)
         eq_values = [max(0, min(1, config[1])) for config in unstable_configurations]
         # print(state, eq_values)
+
         
         if eq_values != []:
             # Plotting
             norm = mcolors.Normalize(0.0, 1.0)
-            if state == 'Stable' or state == 'Unstable':
-                cmap = plt.cm.get_cmap('viridis')
+            # if state == 'Stable' or state == 'Unstable':
+            cmap = plt.cm.get_cmap('viridis')
             # plt.figure(figsize=(8, 6))
             # plt.scatter(c_values, s_values, alpha=0.7, edgecolors='k', label=f"Unstable Configurations" )
             ax.scatter(c_values, s_values, c=eq_values, cmap=cmap, s=50, norm=norm)
@@ -123,7 +214,7 @@ def plot_all(allres, conversion):
     ax.set_xlabel('Conversion Factor (c)', fontsize=12)
     ax.set_ylabel('Selection Coefficient (s)', fontsize=12)
     # plt.title(f'Scatter Plot of {state} Configurations', fontsize=14)
-    ax.set_title(f"Partition of Gene Drive Configurations Based on Stability (H=0.2)", fontsize=14)
+    ax.set_title(f"Partition of Gene Drive Configurations Based on Stability (H=1.0)", fontsize=14)
     ax.set_xlim([0, 1])
     ax.set_ylim([0, 1])
     ax.set_aspect('equal')
@@ -168,28 +259,43 @@ def plot_regions(allres, state, conversion):
 def main():
     s=0.6
     c=0.6
-    h=0.49
+    h=0.9
     q_init=0.001
     regime = 'Fixation'
     params = {'config':(s, c, h), 'q0':q_init, 'conversion': "gametic"}
     filename = f"h{h}_{params['conversion']}_stability_res.pickle"
 
     # run through all configurations
-    allres = runall(params)
-    save_pickle(filename, allres) ### change file name
+    # allres = runall(params)
+    # save_pickle(filename, allres) ### change file name
     
-    allres = load_pickle(filename)
+    # allres = load_pickle(filename)
 
     # print(allres)
-    f_out = open(f"stability_res/h{h}_g_{regime}.txt", 'w') #### change file name!!!!
-    f_out.write(f"gene drive model configuration\t\tequilibrium\n")
-    for state in allres.keys():
-        if state == regime:  ### change state check
-            for config, eq_val in allres[state]:
-                f_out.write(f"(s, c, h) = {config}\t\teq = {eq_val}\n")
-    plot_regions(allres, regime, params['conversion'])
+    # f_out = open(f"stability_res/h{h}_g_{regime}.txt", 'w') #### change file name!!!!
+    # f_out.write(f"gene drive model configuration\t\tequilibrium\n")
+    # for state in allres.keys():
+    #     if state == regime:  ### change state check
+    #         for config, eq_val in allres[state]:
+    #             f_out.write(f"(s, c, h) = {config}\t\teq = {eq_val}\n")
+    # # plot_regions(allres, regime, params['conversion'])
     
     # plot_all(allres, params['conversion'])
+    dfunc = compute_lambda()
+    # params = {'config': (0.5,0.3,0.3), 'q0': 0.001, 'conversion': 'gametic'}
+    # eq = get_eq(params)['q3']
+    # h_ngd = eq/(2*eq-1)
+    # for s_ngd in np.arange(-2, 0, 0.1):
+    #     ngd_eq = wm(s_ngd, h_ngd, 40000, 0.001)['q'][-1]
+    #     ngd_stat = get_ngd_stability(s_ngd, h_ngd, eq, dfunc)
+    #     print("######### GD EQ:", eq)
+    #     print("========= NGD EQ:", ngd_eq)
+    #     print("++++++++++++++++++++++")
+    #     print(f"s_ngd = {s_ngd}, dq = {ngd_stat}")
+    #     print("----------------------")
+    #     ngd_stat_old = get_ngd_stability_old(s_ngd, h_ngd, eq)
+    #     print(f"s_ngd = {s_ngd}, dq_old = {ngd_stat_old}")
+
 
 
 if __name__ == '__main__':

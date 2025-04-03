@@ -2,7 +2,7 @@ import argparse, sys, os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from analysis import plot_mapping, plot_gd, plotMapDiff, ploterror, partition, plot_errorh, getHapseMapDiff
+from analysis import plot_mapping, plot_gd, plotMapDiff, ploterror, partition, plot_errorh, getHapseMapDiff, gd_to_ngd_diff
 
 '''
 ploterror: (run getDiff.py first) Error Heatmap for the Grid/gradient Mapping from GD to NGD Haploid Model at some h
@@ -25,8 +25,9 @@ def main():
         "partition": partition,
         "ploterror": ploterror,
         "plotMapDiff": plotMapDiff,
-        "ploterrorH": plot_errorh,
+        "plot_errorh": plot_errorh,
         "getHapseMapDiff": getHapseMapDiff,
+        "gd_to_ngd_diff": gd_to_ngd_diff
     }
 
     if args.plot_function in plot_functions:
