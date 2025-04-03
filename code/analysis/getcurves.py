@@ -14,11 +14,11 @@ def gd_simulation(params):
     '''
     decides what configurations the current simulation set includes
     '''
-    minVal, maxVal = 0, 1.0 # gd params all in range [0, 1]
+    minVal, maxVal = 0, 1.1 # gd params all in range [0, 1]
     configs = []
-    s_vals = np.arange(minVal, maxVal, 0.01)
-    c_vals = np.arange(0, maxVal, 0.01)
-    h_vals = np.arange(0, maxVal, 0.01)
+    s_vals = np.arange(0, 1.01, 0.01)
+    c_vals = np.arange(0, 1.01, 0.01)
+    h_vals = np.arange(0, maxVal, 0.1)
 
     # get a list of configurations for simulations 
     for s in s_vals:
@@ -46,23 +46,26 @@ def getcurves(params):
     CHANGE SAVED PICKLE FILE NAME!
     '''
     ### RUN NON-GD DIPLOID MODEL AND SAVE
-    minVal, maxVal, step = -10, 1, 0.001
-    s_range = np.arange(minVal, maxVal, step)
-    h_range = np.arange(0, maxVal, step)
-    wm_results = dict()
-    print(s_range, h_range)
-    for s_nat in s_range:  
-        for h_nat in h_range: 
-            print(s_nat, h_nat)
-            wm_curve = wm(s_nat, h_nat, params['target_steps'], params['q0'])['q']
-            wm_results[(round(s_nat, 3), round(h_nat, 3))] = wm_curve
-    save_pickle('allngdres001G.pickle', wm_results)
+    # minVal, maxVal, step = -5, 0, 0.01
+    # s_range = np.arange(minVal, maxVal, step)
+    # hmax = 5
+    # h_range = np.arange(0, hmax, step)
+    # wm_results = dict()
+    # # print(s_range, h_range)
+    # for s_nat in s_range: 
+    #     for h_nat in h_range: 
+    #         # print(s_nat, h_nat)
+    #         wm_curve = wm(s_nat, h_nat, params['target_steps'], params['q0'])['q']
+    #         if (not math.isclose(wm_curve[-1], 1.0) and (not math.isclose(wm_curve[-1], 0.0))):
+    #             print(s_nat, h_nat)
+    #             wm_results[(round(s_nat, 3), round(h_nat, 3))] = wm_curve
+    # save_pickle('ngd_res/new_allngdres001G_h5.pickle', wm_results)
 
-    ### RUN GD MODEL AND SAVE
-    # gd_configs, gd_res = gd_simulation(params)
-    # gd_results = [gd_configs, gd_res]  # gd_configs: list of tuples, gd_res: map {config: curve}
-    # print('length of configs', len(gd_configs))
-    # save_pickle(f"h{params['h']}_allgdres001G.pickle", gd_results)  ### allgdres001: step = 0.01
+    ## RUN GD MODEL AND SAVE
+    gd_configs, gd_res = gd_simulation(params)
+    gd_results = [gd_configs, gd_res]  # gd_configs: list of tuples, gd_res: map {config: curve}
+    print('length of configs', len(gd_configs))
+    save_pickle(f"gd_simulation_results/h{params['h']}_allgdres001G.pickle", gd_results)  ### allgdres001: step = 0.01
 
 def gethaploid(params):
     '''
@@ -77,15 +80,15 @@ def gethaploid(params):
         hapC = haploid(params)
         hapRes[round(s, 3)] = hapC
 
-    save_pickle(f"allhapres0001G.pickle", hapRes)
+    save_pickle(f"allhapresults/allhapres0001G.pickle", hapRes)
 
 colormaps = ['Greys', 'Reds', 'YlOrBr', 'Oranges', 'PuRd', 'BuPu',
                       'GnBu', 'YlGnBu', 'PuBuGn', 'Greens']
 
 def main():
-    params = {'n': 500, 'h': 0.5, 'target_steps': 40000, 'q0': 0.001}
-    # getcurves(params)
-    gethaploid(params)
+    params = {'h': 0.9, 'target_steps': 40000, 'q0': 0.001}
+    getcurves(params)
+    # gethaploid(params)
 
 if __name__ == '__main__':
     main()
