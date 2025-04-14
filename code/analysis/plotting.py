@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib.colors import Normalize
 from matplotlib import cm
 import math
 import pickle
@@ -8,7 +9,7 @@ import os, sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from .stability import get_ngd_stability, compute_lambda
+# from .stability import get_ngd_stability, compute_lambda
 from models import run_model, wm, haploid_se, haploid
 from utils import export_legend, euclidean, load_pickle, save_pickle
 
@@ -59,15 +60,26 @@ def plot_errorh(h):
         
 
 ### plot simple dynamics for gd and non gd ################
-def plot_ngd():
+def plot_ngd(h):
     # with open('pickle/allngdres.pickle', 'rb') as f1:
     #     ngd_res = pickle.load(f1)
-    params = {'s': 0.6, 'c': 1, 'h': 0.5, 'target_steps': 100, 'q0': 0.1}
+    # params = {'s': 0.4, 'c': 0.4, 'h': 0.5, 'target_steps': 100, 'q0': 0.1}
     # res = run_model(params)
-    res = wm(2.3, 10.5, 40000, 0.001)
+    res = wm(0.8, h, 40000, 0.5)
     mut = res['q']
     # plt.plot(wt, color = 'orange', label = 'wild-type')
-    plt.plot(mut, color = 'blue', label = 'mutant')
+    plt.plot(np.arange(0, len(mut)), mut, color = 'blue', label = 'mutant')
+    # plt.ylabel('Allele Frequency')
+    # plt.xlabel('Time')
+    # plt.title('Allele frequency dynamics in non-gene drive population')
+    # plt.grid(True)
+    # plt.legend(title='Allele', bbox_to_anchor=(0.8, 0.5), loc='center left')
+    # plt.show()
+
+def plot_ngds():
+    h_range = np.arange(-10, 10, 1)
+    for h in h_range:
+        plot_ngd(h)
     plt.ylabel('Allele Frequency')
     plt.xlabel('Time')
     plt.title('Allele frequency dynamics in non-gene drive population')
@@ -75,7 +87,7 @@ def plot_ngd():
     plt.legend(title='Allele', bbox_to_anchor=(0.8, 0.5), loc='center left')
     plt.show()
 
-# plot_ngd()
+plot_ngds()
 
 def plot_gd(ts, tc):
     colormaps = ['Greys', 'Reds', 'YlOrBr', 'Oranges', 'PuRd', 'BuPu',
@@ -352,7 +364,7 @@ Need to change the loaded files according to plotted curves
 def plot_mapping(currH):
     # loading results
     gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
-    gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
+    # gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
     gridResult_diploid = load_pickle(f"h{currH}_grid_G_fix.pickle") # all hap grid results
     gridResult = load_pickle(f"h{currH}_hap_grid_G_fix.pickle")
 
@@ -360,12 +372,12 @@ def plot_mapping(currH):
 
     sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
     sMap_grid_diploid, wms_grid_diploid = gridResult_diploid['map'], gridResult_diploid['ngC']
-    sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
+    # sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
 
     plt.figure(figsize = (15, 7))
 
     for (s, c, h) in gd_configs:
-        if (math.isclose(s, 0.8) and math.isclose(c, 0.7)):
+        if (math.isclose(s, 0.4) and math.isclose(c, 0.4)):
         # if s < c and math.isclose(s, 0.1):
             # plot grid (hap/diploid?)
             if (s, c, h) in sMap_grid and type(sMap_grid[(s,c,h)]) != tuple:
@@ -379,8 +391,8 @@ def plot_mapping(currH):
                 # print("TRUEE")
                 best_s_grid, best_h_grid = sMap_grid_diploid[(s, c, h)][0], sMap_grid_diploid[(s, c, h)][1]
 
-                # best_s_grid = -0.32
-                # cmap = plt.get_cmap('GnBu')
+                best_s_grid = -0.32
+                cmap = plt.get_cmap('GnBu')
                 # w_color = cmap(1.*i/len(h_range))
                 w_color0 = 'g'
                 # i = list(sMap_grid_diploid.keys()).index((s, c, h))
@@ -391,23 +403,23 @@ def plot_mapping(currH):
             # PLOT GRADIENT (HAP/DIPLOID)
             # cmap2 = plt.get_cmap('GnBu') # grid mapping curves
             # w_color2 = cmap2(abs(best_s_grad))
-            w_color2 = "b"
-            if (s, c, h) in sMap_grad and type(sMap_grad[(s,c,h)]) != tuple:
-                best_s_grad = sMap_grad[(s, c, h)]
-                paramHap = {'s':best_s_grad, 'n': 500, 'target_steps': 40000, 'q0': 0.001}
-                wm_curve_hap_grad = haploid(paramHap)['q']
-                time4 = np.arange(0, len(wm_curve_hap_grad))
-                plt.plot(time4, wm_curve_hap_grad, marker = 's', color = w_color2, markersize=3, linestyle = '-', label = f'gradient descent haploid NGD s = {best_s_grad}')
-            # best_h_grid = sMap_grid[(s, c, h)][1]
-            else:
-                best_s_grad, best_h_grad = sMap_grad[(s, c, h)][0], sMap_grad[(s, c, h)][1]
-                print("BEFORE", best_s_grad, best_h_grad)
-                # best_s_grad, best_h_grad = -1.33, 1
-                wm_curve_grad = wm(best_s_grad, best_h_grad, 40000, 0.001)['q']
-                time2 = np.arange(0, len(wm_curve_grad))
-                error = euclidean(gd_res[(s, c, h)]['q'], wm_curve_grad)
-                print('ERROR', error)
-                plt.plot(time2, wm_curve_grad, marker = 's', color = w_color2, markersize=3, linestyle = '-', label = f'gradient descent diploid NGD s = {best_s_grad}, h = {best_h_grad}')
+            # w_color2 = "b"
+            # if (s, c, h) in sMap_grad and type(sMap_grad[(s,c,h)]) != tuple:
+            #     best_s_grad = sMap_grad[(s, c, h)]
+            #     paramHap = {'s':best_s_grad, 'n': 500, 'target_steps': 40000, 'q0': 0.001}
+            #     wm_curve_hap_grad = haploid(paramHap)['q']
+            #     time4 = np.arange(0, len(wm_curve_hap_grad))
+            #     plt.plot(time4, wm_curve_hap_grad, marker = 's', color = w_color2, markersize=3, linestyle = '-', label = f'gradient descent haploid NGD s = {best_s_grad}')
+            # # best_h_grid = sMap_grid[(s, c, h)][1]
+            # else:
+            #     best_s_grad, best_h_grad = sMap_grad[(s, c, h)][0], sMap_grad[(s, c, h)][1]
+            #     print("BEFORE", best_s_grad, best_h_grad)
+            #     # best_s_grad, best_h_grad = -1.33, 1
+            #     wm_curve_grad = wm(best_s_grad, best_h_grad, 40000, 0.001)['q']
+            #     time2 = np.arange(0, len(wm_curve_grad))
+            #     error = euclidean(gd_res[(s, c, h)]['q'], wm_curve_grad)
+            #     print('ERROR', error)
+            #     plt.plot(time2, wm_curve_grad, marker = 's', color = w_color2, markersize=3, linestyle = '-', label = f'gradient descent diploid NGD s = {best_s_grad}, h = {best_h_grad}')
             # print(best_s_grad)
 
             # PLOT GD CURVE
@@ -435,7 +447,7 @@ def plot_mapping(currH):
             print("plotting gd and mapped curves")
 
             plt.plot(time, gd_res[(s, c, h)]['q'], color = gd_color, label = f"s = {s}, c = {c}, h = {h}")
-            # plt.plot(time_se, hapSe, marker = 'o', color = se_color, markersize=3, label = f"haploid using Se (s = {'%.3f'%se})")
+            plt.plot(time_se, hapSe, marker = 'o', color = se_color, markersize=3, label = f"haploid using Se (s = {'%.3f'%se})")
             # plt.plot(time3, gd_res[(s, c, h)]['w_bar'], color = 'b', label = f"wbar for s = {s}, c = {c}, h = {h}")
 
 
@@ -447,7 +459,7 @@ def plot_mapping(currH):
             # ngd_curve = wm(ngd_s, ngd_h, 40000, 0.0001)['q']
             # time_ngd = np.arange(0, len(ngd_curve))
             # plt.plot(time_ngd, ngd_curve, color = '#6666FF', label = f"NGD with s={ngd_s}, h={ngd_h}, error={'%.3f'%error}")
-    print(euclidean(gd_res[(s, c, h)]['q'], wm_curve_grid))
+    # print(euclidean(gd_res[(s, c, h)]['q'], wm_curve_grid))
     plt.ylabel('Gene Drive/Mutant Allele Frequency', fontsize=12)
     plt.xlabel('Time', fontsize=12)
     plt.title(f"Comparison of gene drive and different mapping results at h = {currH}")
@@ -653,15 +665,15 @@ def plot_eq_lambda(gd_config):
     plt.show()
 
 def plot_lambda_curve(h, q, gd_config):
-    dfunc = compute_lambda()
-    lambdas= []
-    s_range = np.arange(-10, 10, 0.01)
-    for s in s_range:
-        l = get_ngd_stability(s, h, q, dfunc)
-        lambdas.append(l)
+    # dfunc = compute_lambda()
+    # lambdas= []
+    # s_range = np.arange(-10, 10, 0.01)
+    # for s in s_range:
+    #     l = get_ngd_stability(s, h, q, dfunc)
+    #     lambdas.append(l)
     
-    plt.figure(figsize=(8, 6))
-    plt.plot(s_range, lambdas, label=f"dq at equilibrium with h_ngd = {h:.3f}", marker='o')
+    # plt.figure(figsize=(8, 6))
+    # plt.plot(s_range, lambdas, label=f"dq at equilibrium with h_ngd = {h:.3f}", marker='o')
 
     plt.xlabel("s_ngd")
     plt.ylabel("Lambda (dq)")
@@ -670,6 +682,71 @@ def plot_lambda_curve(h, q, gd_config):
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+
+from collections import defaultdict
+''''
+Plot the mapped GD and NGD curves with different q_init for unstable regime
+'''
+
+def plot_qmaps(currH):
+    curves = dict()
+    current_gd = None
+    filepath = f"q_mapped_s/h{currH}_s0.8_c0.8_grid_G_unstable.txt"
+
+    with open(filepath, 'r') as file:
+        for line in file:
+            line = line.strip()
+            if not line or line.startswith("Gene Drive Configuration") or line.startswith("(s, h)"):
+                continue  # skip headers
+
+            parts = line.split()
+            print(parts)
+            if line.startswith('s='):  # gene drive line
+                # Extract gene drive parameters
+                gd_s = float(parts[0].split('=')[1].strip(','))
+                gd_c = float(parts[1].split('=')[1].strip(','))
+                gd_h = float(parts[2].split('=')[1])
+
+                # Extract NGD parameters
+                q_init = float(parts[3].split('=')[1].strip(','))
+                ngd_s = float(parts[4].split('=')[1].strip(','))
+                ngd_h = float(parts[5].split('=')[1])
+
+                current_gd = (gd_s, gd_c, gd_h, q_init)
+                curves[current_gd]=(q_init, ngd_s, ngd_h)
+
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    q_values = [item[3] for item in curves.keys()]
+    norm = Normalize(vmin=min(q_values), vmax=max(q_values))
+    cmap1 = cm.get_cmap('viridis')
+    cmap2 = cm.get_cmap('BuPu')
+    for i, (gd_params, data_points) in enumerate(curves.items()):
+        print(gd_params, data_points)
+        gd_s, gd_c, gd_h, q_init = gd_params
+        gd_params = {'s': gd_s, 'h':gd_h, 'c': gd_c, 'q0': q_init, 'target_steps': 40000}
+        q_init, ngd_s, ngd_h = data_points
+        gd_curve = run_model(gd_params)['q']
+        ngd_curve = wm(gd_s, gd_h, 40000, q_init)['q']
+        color1 = cmap1(norm(q_init))
+        # color2 = cmap2(norm(q_init))
+        plt.plot(np.arange(0, len(gd_curve)), gd_curve, marker = 'o', linestyle = '-', markersize=3, color = color1, label = f"GD q_init={q_init}, s = {gd_s}, c = {gd_c}, h = {gd_h}")
+        plt.plot(np.arange(0, len(ngd_curve)), ngd_curve, marker = 's', linestyle = '--', markersize=3, color = color1, label = f"NGD q_init={q_init}, s = {ngd_s}, h = {ngd_h}")
+    # for i, (gd_params, data_points) in enumerate(curves.items()):
+    #     q_vals = [dp[0] for dp in data_points]
+    #     s_vals = [dp[1] for dp in data_points]
+    #     label = f's={gd_params[0]}, c={gd_params[1]}, h={gd_params[2]}'
+    #     plt.plot(q_vals, s_vals, marker='o', label=label)
+
+    plt.xlabel('Time Steps')
+    plt.ylabel('Mapped GD and NGD curves over different q_init')
+    plt.title('Change in Mapping with different q_init')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
 
 # plot_msedl((0.7, 0.4, 0.3))
 # plot_eq_lambda((0.2, 0.1, 0.3))

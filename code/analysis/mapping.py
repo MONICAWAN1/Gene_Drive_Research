@@ -379,44 +379,42 @@ def get_delta_lambda(gd_config, ngd_config, eq):
     ngd_lambda = get_ngd_stability(ngd_config[0], ngd_config[1], eq)
     return (gd_lambda-ngd_lambda, ngd_lambda)
 
-def find_candidate(s_ngd, h_ngd, state, gd_config, gd_curve, eq, s_mse_map):
+def find_candidate(s_ngd, h_ngd, q_ngd, state, gd_config, gd_curve, eq, s_mse_map):
 
     gds, gdc, gdh = gd_config
  
-    best_diff = None
+    best_diff = 100000
     best_ngd_config = None
     best_ngd_curve = None
     target_steps = 40000
     # best_dl = None
-    if state == 'Unstable':
-        q_init_list = [0.001, 0.01, 0.1, 0.2, 0.5, 0.8, 0.9]
-    else:
-        q_init_list = [0.001]
-    for q_ngd in q_init_list:
-        # curr_eq from simulation might not be the same as the analytical eq of gd ???
-        curr_eq = wm(s_ngd, h_ngd, target_steps, q_ngd)['q'][-1]
-        if check_state_eq(s_ngd, h_ngd, eq, state): 
-            # if s_ngd < 0:
-            #     print("-----FIND MSE: S WITH THE SAME STATE:", s_ngd)
-            delta_lambda, ngd_lambda = get_delta_lambda(gd_config, (s_ngd, h_ngd), eq)
-            ### get MSE
-            ngd_curve = wm(s_ngd, h_ngd, target_steps, q_ngd)['q']
-            diff = euclidean(ngd_curve, gd_curve)
-            # print(s_ngd, h_ngd, diff)
-            nl = ngd_lambda if ngd_lambda != 'NA' else 0
-            s_mse_map[s_ngd] = {'MSE': diff, "dl": delta_lambda, 'eq': curr_eq, "lambda": nl}
-            
-            # print(diff)
-            if best_diff == None or diff < best_diff:
-                best_diff = diff
-                best_ngd_config = (s_ngd, h_ngd, q_ngd)
-                best_ngd_curve = ngd_curve
+    # curr_eq from simulation might not be the same as the analytical eq of gd ???
+    curr_eq = wm(s_ngd, h_ngd, target_steps, q_ngd)['q'][-1]
+    if check_state_eq(s_ngd, h_ngd, eq, state): 
+        # if s_ngd < 0:
+        #     print("-----FIND MSE: S WITH THE SAME STATE:", s_ngd)
+        delta_lambda, ngd_lambda = get_delta_lambda(gd_config, (s_ngd, h_ngd), eq)
+        ### get MSE
+        ngd_curve = wm(s_ngd, h_ngd, target_steps, q_ngd)['q']
+        diff = euclidean(ngd_curve, gd_curve)
+        # print(s_ngd, h_ngd, diff)
+        nl = ngd_lambda if ngd_lambda != 'NA' else 0
+        s_mse_map[s_ngd] = {'MSE': diff, "dl": delta_lambda, 'eq': curr_eq, "lambda": nl}
+        
+        # print(diff)
+        # if best_diff == None or diff < best_diff:
+        best_diff = diff
+        best_ngd_config = (s_ngd, h_ngd)
+        best_ngd_curve = ngd_curve
+
+
             
             ######  OPTION 2: If picking s_ngd based on delta_lambda: ############
             # if best_dl == None or delta_lambda < best_dl:
             #     best_dl = delta_lambda
             #     best_ngd_config = (s_ngd, h_ngd, q_ngd)
             #     best_ngd_curve = ngd_curve
+        
 
     return (best_ngd_config, best_ngd_curve, best_diff)
 
@@ -424,12 +422,12 @@ def find_candidate(s_ngd, h_ngd, state, gd_config, gd_curve, eq, s_mse_map):
 def grid_mapping(params, gdFile):
     seffMap = dict()
     ngd_mapped = []
-    ts = 0.5
-    tc = 0.3
-    state = "Stable"
+    ts = 0.8
+    tc = 0.8
+    state = "Unstable"
     ### !!! CHANGE THE FILE NAME IF RUNNING FOR ALL !!!!!!
-    f_out = open(f"h{params['h']}_grid_G{gdFile}_stable.txt", 'w')
-    # f_out = open(f"h{params['h']}_s{ts}_c{tc}_grid_G{gdFile}_stable.txt", 'w')
+    # f_out = open(f"h{params['h']}_grid_G{gdFile}_stable.txt", 'w')
+    f_out = open(f"q_mapped_s/h{params['h']}_s{ts}_c{tc}_grid_G{gdFile}_unstable.txt", 'w')
     f_out.write(f"Gene Drive Configuration\t\t(s, h) in NGD population (S_Effective)\n")
 
     ### LOADING NECESSARY RESULTS FOR MAPPING 
@@ -450,18 +448,18 @@ def grid_mapping(params, gdFile):
         params_eq = {'config': (s, c, h), 'conversion': 'gametic'}
         eq = get_eq(params_eq)['q3']
 
-        if ((s, c, h), eq) in stabilityRes[state]:
-        # if ((s, c, h), eq) in stabilityRes[state] and math.isclose(s, ts) and math.isclose(c, tc):
+        # if ((s, c, h), eq) in stabilityRes[state]:
+        if ((s, c, h), eq) in stabilityRes[state] and math.isclose(s, ts) and math.isclose(c, tc):
         # if gd_res[(s,c,h)]['state'] == 'fix':
             print("!!!!!!!!!!!!!!!!!!!!!!!!!")
             print(s, c, h)
             gd_curve = gd_res[(s, c, h)]['q']
-            best_diff = 10000
-            best_ngd_config = None
-            best_ngd_curve = None
+            all_best_diff = dict()
+            best_ngd_config = dict()
+            best_ngd_curve = dict()
 
             output_folder = f"gd_candidates"
-            outtxtName = os.path.join(output_folder, f"gd{s}_{c}_{h}_stable_MSE_lambda.txt")
+            outtxtName = os.path.join(output_folder, f"gd{s}_{c}_{h}_unstable_MSE.txt")
             if state == "Stable" or state == "Unstable":
                 # for each gd config, open a new file to store the MSE for each s_ngd
                 out1 = open(outtxtName, "w")
@@ -470,37 +468,44 @@ def grid_mapping(params, gdFile):
                 h_ngd = eq/(2*eq-1)
                 # print('----h_ngd----', h_ngd)
                 # print("STABLE MAPPING WITH H_ngd =", h_ngd)
-                s_mse_map = dict()
-                s_range = np.arange(-10.0, 10.0, 0.01)
+                if state == 'Unstable':
+                    q_init_list = [0.001, 0.01, 0.1, 0.2, 0.3, 0.5, 0.6, 0.8, 0.9]
+                else:
+                    q_init_list = [0.001]
+                for q_ngd in q_init_list:
+                    out1.write(f"q_init = {q_ngd:.4f}---------------------\n")
+                    best_diff = 10000
+                    s_mse_map = dict()
+                    s_range = np.arange(-10.0, 10.0, 0.01)
 
-                ### plot the lambda vs. s_ngd curve
-                # plot_lambda_curve(h_ngd, eq, (s, c, h))
+                    ### plot the lambda vs. s_ngd curve
+                    # plot_lambda_curve(h_ngd, eq, (s, c, h))
                 
-                for s_ngd in s_range:
+                    for s_ngd in s_range:
+                        
+                        curr_ngd_config, curr_ngd_curve, curr_MSE = find_candidate(s_ngd, h_ngd, q_ngd, state, (s, c, h), gd_curve, eq, s_mse_map)
+                        # if math.isclose(s, 0.3) and math.isclose(c, 0.2):
+                        #     print("SINGLE S RESULT", s_ngd, curr_ngd_config, curr_MSE)
+                        # print(curr_ngd_config, curr_MSE)
+                        if best_ngd_config == dict() or (curr_ngd_config != None and curr_MSE < best_diff):
+                            best_diff = curr_MSE
+                            best_ngd_config[q_ngd] = curr_ngd_config
+                            best_ngd_curve[q_ngd] = curr_ngd_curve
+                        # print(q_ngd, best_diff)
+                        all_best_diff[q_ngd] = best_diff
                     
-                    curr_ngd_config, curr_ngd_curve, curr_MSE = find_candidate(s_ngd, h_ngd, state, (s, c, h), gd_curve, eq, s_mse_map)
-                    # if math.isclose(s, 0.3) and math.isclose(c, 0.2):
-                    #     print("SINGLE S RESULT", s_ngd, curr_ngd_config, curr_MSE)
-                    # print(curr_ngd_config, curr_MSE)
-                    if curr_ngd_config == None: 
-                        continue
-                    if best_ngd_config == None or (curr_ngd_config != None and curr_MSE < best_diff):
-                        best_diff = curr_MSE
-                        best_ngd_config = curr_ngd_config
-                        best_ngd_curve = curr_ngd_curve
-                    
-                    ### get delta_lambda
-                    delta_lambda = get_delta_lambda((s, c, h), (s_ngd, h_ngd), eq)
-                    # for each s_ngd, store the MSE and delta lambda
-                    out1.write(f"s_ngd = {s_ngd:.4f}, MSE = {best_diff:.4f}, lambda = {delta_lambda:.4f}\n")
-            else: 
-                for ngd_key, ngd_curve in ngd_results.items():
-                    diff = euclidean(ngd_curve, gd_curve)
-                    # print(diff)
-                    if diff < best_diff:
-                        best_diff = diff
-                        best_ngd_config = ngd_key
-                        best_ngd_curve = ngd_curve
+                        ### get delta_lambda
+                        # delta_lambda = get_delta_lambda((s, c, h), best_ngd_config[q_ngd], eq)
+                        # for each s_ngd, store the MSE and delta lambda
+                    out1.write(f"q_init={q_ngd:.4f}: s_ngd={s_ngd:.4f}, MSE={best_diff:.6f}\n")
+            # else: 
+            #     for ngd_key, ngd_curve in ngd_results.items():
+            #         diff = euclidean(ngd_curve, gd_curve)
+            #         # print(diff)
+            #         if diff < best_diff:
+            #             best_diff = diff
+            #             best_ngd_config = ngd_key
+            #             best_ngd_curve = ngd_curve
 
             if best_ngd_config == None: 
                 print("!!!!!!!!!!!!!NO STABLE SNGD")
@@ -510,12 +515,19 @@ def grid_mapping(params, gdFile):
             seffMap[(s, c, h)] = best_ngd_config
             ngd_mapped.append(best_ngd_curve)
 
-            f_out.write(f"s={'%.3f' % s}, c={'%.3f' % c}, h={'%.3f' % h}\t\ts={'%.3f' % float(best_ngd_config[0])}, h={'%.3f' % float(best_ngd_config[1])}, q={'%.3f' % float(best_ngd_config[2])}\terror={'%.3f' % float(best_diff)}\n")
+            print(seffMap[(s, c, h)])
+            
+            for qkey in best_ngd_config.keys():
+                # f_out.write(f"q_init = {qkey:.4f}")
+                best_config = best_ngd_config[qkey]
+                best_mse = all_best_diff[qkey]
+
+                f_out.write(f"s={'%.3f' % s}, c={'%.3f' % c}, h={'%.3f' % h}\t\tq_init={qkey:.4f}, s={'%.3f' % float(best_config[0])}, h={'%.3f' % float(best_config[1])}\terror={'%.6f' % float(best_mse)}\n")
 
             output_folder = "gd_candidates"
-            pickle_filename = os.path.join(output_folder, f"gd{(s, c, h)}_stable_finds.pickle")
+            # pickle_filename = os.path.join(output_folder, f"gd{(s, c, h)}_stable_finds.pickle")
             # Save the results dictionary into a pickle file.
-            save_pickle(pickle_filename, s_mse_map)
+            # save_pickle(pickle_filename, s_mse_map)
             # print(s_mse_map)
     
     # print(seffMap)
