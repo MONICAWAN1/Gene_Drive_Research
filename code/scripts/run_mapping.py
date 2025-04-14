@@ -45,9 +45,9 @@ def main():
         tc = 0.9
         if args.s:
             print("Saving results and computing differences...")
-            save_pickle(f"h{args.h}_{args.map_function}{label}_G_fix.pickle", mapping_result)
+            # save_pickle(f"h{args.h}_{args.map_function}{label}_G_unstable.pickle", mapping_result)
 
-            getdiff(args.h, args.map_function, label)
+            # getdiff(args.h, args.map_function, label)
     else:
         print(f"Error: {args.map_function} is not a valid mapping function.")
 

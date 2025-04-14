@@ -32,7 +32,7 @@ def getdiff(currH, mapfunction, gdFile):
     # test s, c values
     ts = 0.2
     tc = 0.9
-    state = "fix"
+    state = "Unstable"
 
     loadFile = f"gd_simulation_results/h{currH}_allgdres{gdFile}G.pickle"
     fileName = f"h{currH}_mappingdiff_{mapfunction}{gdFile}_G_{state}.txt"
