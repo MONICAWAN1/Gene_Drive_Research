@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import sympy as sp
 
-from .stability import derivative
+from .stability import derivative, compute_lambda_gd
 from .plotting import plot_lambda_curve
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -422,8 +422,8 @@ def find_candidate(s_ngd, h_ngd, q_ngd, state, gd_config, gd_curve, eq, s_mse_ma
 def grid_mapping(params, gdFile):
     seffMap = dict()
     ngd_mapped = []
-    ts = 0.8
-    tc = 0.8
+    ts = 0.4
+    tc = 0.4
     state = "Unstable"
     ### !!! CHANGE THE FILE NAME IF RUNNING FOR ALL !!!!!!
     # f_out = open(f"h{params['h']}_grid_G{gdFile}_stable.txt", 'w')
@@ -525,7 +525,7 @@ def grid_mapping(params, gdFile):
                 f_out.write(f"s={'%.3f' % s}, c={'%.3f' % c}, h={'%.3f' % h}\t\tq_init={qkey:.4f}, s={'%.3f' % float(best_config[0])}, h={'%.3f' % float(best_config[1])}\terror={'%.6f' % float(best_mse)}\n")
 
             output_folder = "gd_candidates"
-            # pickle_filename = os.path.join(output_folder, f"gd{(s, c, h)}_stable_finds.pickle")
+            # pickle_filename = os.path.join(output_folder, f"gd{(s, c, h)}_{state}_finds.pickle")
             # Save the results dictionary into a pickle file.
             # save_pickle(pickle_filename, s_mse_map)
             # print(s_mse_map)
@@ -549,8 +549,8 @@ def grid_mapping_fix(params, gdFile):
     ngd_results = load_pickle(f"allngdres001G.pickle")
 
     for (s, c, h) in gd_configs:
-        if ((s, c, h), 1.0) in stabilityRes['Fixation']:
-        # if gd_res[(s,c,h)]['state'] == 'fix':
+        # if ((s, c, h), 1.0) in stabilityRes['Fixation']:
+        if gd_res[(s,c,h)]['state'] == 'fix':
             print(s, c, h)
             gd_curve = gd_res[(s, c, h)]['q']
             best_diff = 10000
@@ -609,3 +609,49 @@ def gradient_mapping(params, gdFile):
             seffMap[(round(float(s), 3), round(float(c), 3), round(float(h), 3))] = (round(float(best_s), 3), round(float(best_h), 3))
             wms.append(best_curve)
     return {'map': seffMap, 'ngC': wms}
+
+def check_mapping(params, gdFile):
+    sanity_failures = []
+    h_val = params['h']
+    stabilityRes = loadStability(h_val)
+    gd_results = loadGres(h_val, gdFile)
+    gd_configs, gd_res = gd_results[0], gd_results[1]
+
+    dfunc = compute_lambda_gd()
+
+    for (s, c, h) in gd_configs:
+        if not math.isclose(c, 0.0):  # Only consider c = 0 configs
+            continue
+
+        # Extract equilibrium
+        params_eq = {'config': (s, c, h), 'conversion': 'gametic'}
+        eq = get_eq(params_eq)['q3']
+
+        if eq == 'NA' or not (0 < eq < 1):
+            continue
+
+        if ((s, c, h), eq) not in stabilityRes['Unstable']:
+            continue  # Only focus on unstable region
+
+        # The expected h_ngd based on q_eq should match h
+        mapped_h = eq / (2 * eq - 1)
+        # Compare to the original GD h
+        if not math.isclose(mapped_h, h, rel_tol=1e-2):
+            sanity_failures.append(((s, c, h), mapped_h))
+
+        print(f"GD (s={s:.3f}, h={h:.3f}, c=0.000) → q_eq={eq:.4f} → h_ngd={mapped_h:.4f} (original h={h:.4f})")
+
+    if not sanity_failures:
+        print("Sanity check passed: all h_ngd ≈ h for c = 0")
+    else:
+        print("Sanity check failed for the following configs:")
+        for config, mapped_h in sanity_failures:
+            s, c, h = config
+            print(f"GD (s={s:.3f}, h={h:.3f}) → mapped h_ngd = {mapped_h:.4f}")
+
+    return sanity_failures
+
+
+# params = params = {'n': 500, 'h': 0.3, 'target_steps': 40000, 'q0': 0.001}
+# check_mapping(params)
+

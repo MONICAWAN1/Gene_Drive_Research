@@ -2,7 +2,7 @@ import argparse, sys, os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from analysis import grid_mapping, grid_mapping_fix, gradient_mapping, hap_grid_mapping, hap_gradient_mapping, getdiff
+from analysis import grid_mapping, grid_mapping_fix, gradient_mapping, hap_grid_mapping, hap_gradient_mapping, getdiff, check_mapping
 from utils import save_pickle
 
 def main():
@@ -20,36 +20,38 @@ def main():
         "gradient": gradient_mapping,
         "hap_grid": hap_grid_mapping,
         "hap_gradient": hap_gradient_mapping,
-        "grid_fix": grid_mapping_fix
+        "grid_fix": grid_mapping_fix,
+        "check_mapping": check_mapping
     }
 
-    if args.map_function in map_functions:
-        print(f"Running {args.map_function}...")
-        if '0001' in args.gdFile:
-            label='0001'
-        elif '001' in args.gdFile:
-            label='001'
-        else:
-            label=''
-
-        if args.map_function in map_functions:
-            params = {'n': 500, 'h': args.h, 'target_steps': 40000, 'q0': 0.001}
-            mapping_result = map_functions[args.map_function](params, label)
-        else:
-            print('NOT IN MAP_FUNCTIONS', args.map_function)
-            mapping_result = map_functions[args.map_function]()
-        print(f'Running {args.map_function} mapping...')
-
-        # DEBUGGING GRADIENT DESCENT
-        ts = 0.2
-        tc = 0.9
-        if args.s:
-            print("Saving results and computing differences...")
-            # save_pickle(f"h{args.h}_{args.map_function}{label}_G_unstable.pickle", mapping_result)
-
-            # getdiff(args.h, args.map_function, label)
+    print(f"Running {args.map_function}...")
+    if '0001' in args.gdFile:
+        label='0001'
+    elif '001' in args.gdFile:
+        label='001'
     else:
-        print(f"Error: {args.map_function} is not a valid mapping function.")
+        label=''
+
+    params = {'n': 500, 'h': args.h, 'target_steps': 40000, 'q0': 0.001}
+
+    if args.map_function in map_functions:
+        if args.map_function == "check_mapping":
+            map_functions[args.map_function](params, label)
+        else:
+            mapping_result = map_functions[args.map_function](params, label)
+    else:
+        print('NOT IN MAP_FUNCTIONS', args.map_function)
+        mapping_result = map_functions[args.map_function]()
+    print(f'Running {args.map_function} mapping...')
+
+    # DEBUGGING GRADIENT DESCENT
+    ts = 0.2
+    tc = 0.9
+    if args.s:
+        print("Saving results and computing differences...")
+        save_pickle(f"h{args.h}_{args.map_function}{label}_G_fix.pickle", mapping_result)
+
+        getdiff(args.h, args.map_function, label)
 
 if __name__ == "__main__":
     main()

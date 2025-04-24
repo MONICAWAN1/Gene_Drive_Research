@@ -26,8 +26,11 @@ def wm(s, h, target_steps, q_init):
             or math.isclose(curr_q, q_freqs[t+1], rel_tol=1e-5)):
             final = t+1
             break
+
+    state = checkState(final, q_freqs)
+    if state == None: print('none', q_freqs[t], q_freqs[t+1])
     # return {'q': q_freqs[:final], 'w_bar': w[:final-1]}
-    return {'q': q_freqs[:final]}
+    return {'q': q_freqs[:final], 'state': state}
 
 
 
@@ -91,12 +94,12 @@ def haploid(params):
 
     return {'q': freqs[:final], 'p': wtfreqs[:final], 'w_bar': w[:final-1], 'state': state}
 
-def checkState(final, freqs, params):
+def checkState(final, freqs):
     if freqs[final-1] >= 0.99: state = 'fix'
     elif freqs[final-1] <= 0.01: 
-        if freqs[final-1] > freqs[final-2]:
-            state = 'fix'
-        else: state = 'loss'
+        # if freqs[final-1] > freqs[final-2]:
+        #     state = 'fix'
+        state = 'loss'
     elif at_eq(freqs): state = 'stable'
     else: 
         state = 'unstable'

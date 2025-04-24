@@ -10,26 +10,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from models import wm
 
-def compute_lambda():
-# Define symbols
-    q, s, h = sp.symbols('q s h')
-
-    # Define numerator and denominator
-    numerator = q**2 * (1 - s) + q * (1 - q) * (1 - h * s)
-    wbar = q**2 * (1 - s) + 2 * q * (1 - q) * (1 - h * s) + (1 - q)**2
-
-    # Define q(t+1)
-    q_next = numerator / wbar
-
-    # Compute the derivative ∂q(t+1)/∂q(t)
-    dq_next_dq = sp.simplify(sp.diff(q_next, q))
-
-    dq_dq_func = sp.lambdify((s, h, q), dq_next_dq, "numpy")
-
-    # Print the simplified result
-    sp.pprint(dq_next_dq)
-    return dq_dq_func
-
 def compute_lambda_gd():
 # Define symbols
     s, c, h, q = sp.symbols('s c h q')
@@ -55,14 +35,6 @@ def compute_lambda_gd():
 def get_gd_stability(s, c, h, q, dfunc):
     try:
         slope = dfunc(s, c, h, q)
-    except ZeroDivisionError:
-        slope = 'NA'
-        print(f"Division by zero: config = {(s, h, q)}")
-    return slope
-
-def get_ngd_stability(s, h, q, dfunc):
-    try:
-        slope = dfunc(s, h, q)
     except ZeroDivisionError:
         slope = 'NA'
         print(f"Division by zero: config = {(s, h, q)}")
@@ -126,12 +98,8 @@ def get_eq(params):
     return eqs
 
 '''
-Given the NGD parameter (s, h), return the stable eq
+get NGD phase partition
 '''
-def get_eq_ngd(s, h):
-    if not math.isclose(h, 0.5):
-        return (h*s)/(2*h*s - s)
-    return 'NA'
 
 # get_eq({'config':(0.2, 0.8, 0), 'q0':0.001, 'conversion': "zygotic"})
 '''
@@ -188,7 +156,7 @@ def runall(params):
         
     return allres
             
-def plot_all(allres, conversion):
+def plot_all(allres, params):
     fig, ax = plt.subplots()
     for state in allres:
 
@@ -214,7 +182,7 @@ def plot_all(allres, conversion):
     ax.set_xlabel('Conversion Factor (c)', fontsize=12)
     ax.set_ylabel('Selection Coefficient (s)', fontsize=12)
     # plt.title(f'Scatter Plot of {state} Configurations', fontsize=14)
-    ax.set_title(f"Partition of Gene Drive Configurations Based on Stability (H=1.0)", fontsize=14)
+    ax.set_title(f"Partition of Gene Drive Configurations Based on Stability (H={params['config'][2]})", fontsize=14)
     ax.set_xlim([0, 1])
     ax.set_ylim([0, 1])
     ax.set_aspect('equal')
@@ -256,10 +224,135 @@ def plot_regions(allres, state, conversion):
     plt.grid(True)
     plt.show()
 
+#######################################################################################
+# NGD stability 
+#######################################################################################
+def compute_lambda():
+# Define symbols
+    q, s, h = sp.symbols('q s h')
+
+    # Define numerator and denominator
+    numerator = q**2 * (1 - s) + q * (1 - q) * (1 - h * s)
+    wbar = q**2 * (1 - s) + 2 * q * (1 - q) * (1 - h * s) + (1 - q)**2
+
+    # Define q(t+1)
+    q_next = numerator / wbar
+
+    # Compute the derivative ∂q(t+1)/∂q(t)
+    dq_next_dq = sp.simplify(sp.diff(q_next, q))
+
+    dq_dq_func = sp.lambdify((s, h, q), dq_next_dq, "numpy")
+
+    # Print the simplified result
+    sp.pprint(dq_next_dq)
+    return dq_dq_func
+
+dfunc_ngd = compute_lambda()
+
+def get_ngd_stability(s, h, q, dfunc_ngd):
+    try:
+        slope = dfunc_ngd(s, h, q)
+    except ZeroDivisionError:
+        slope = 'NA'
+        print(f"Division by zero: config = {(s, h, q)}")
+    return slope
+
+'''
+Given the NGD parameter (s, h), return the stable eq
+'''
+def get_eq_ngd(s, h):
+    if not math.isclose(h, 0.5):
+        if (math.isclose(2*h*s - s, 0.0)):
+            print(f'Division by zero: config = {(s, h)}')
+            return 'NA'
+        return (h*s)/(2*h*s - s)
+    return 'NA'
+
+print(get_eq_ngd(-0.2, 0.1))
+
+
+def runall_ngd(q_init):
+    allres = {'Stable': [], 'Unstable': [], 'dq=1': [], 'Fixation': [], 'Loss': []}
+    dfunc = compute_lambda()
+
+    for s in np.arange(-2, 2, 0.1):
+        for h in np.arange(-2, 2, 0.1):
+            s = round(float(s), 3)
+            h = round(float(h), 3)
+            # print(s, h)
+
+            # eq = get_eq_ngd(s, h)
+            eq = wm(s, h, 40000, q_init)['q'][-1]
+
+            if eq != 'NA':
+                # print("getting stability")
+                # print(s, h, eq)
+                slope = get_ngd_stability(s, h, eq, dfunc)
+
+                if eq >= 1 or math.isclose(eq, 1.0):
+                    allres['Fixation'].append(((s, h), 1.0))
+                elif eq <= 0 or math.isclose(eq, 0.0):
+                    allres['Loss'].append(((s, h), 0.0))
+                else:
+                    if slope != 'NA':
+                        if abs(slope) < 1:
+                            allres['Stable'].append(((s, h), eq, slope))
+                        elif abs(slope) > 1:
+                            allres['Unstable'].append(((s, h), eq, slope))
+                        elif math.isclose(slope, 1.0):
+                            allres['dq=1'].append(((s, h), eq))
+            else:
+                print('NO EQ:', s, h)
+                res = wm(s, h, 40000, q_init)
+                res_state = res['state'] 
+                if res_state == 'loss':
+                    allres['Loss'].append(((s, h), 0.0))
+                elif res_state == 'fix':
+                    allres['Fixation'].append(((s, h), 1.0))
+                else:
+                    print(f"Skipping invalid config s={s}, h={h}, final={res['q'][-1]}")
+
+    with open(f"stability_res/NGD_partition_sim_q{q_init}.txt", "w") as out:
+        for state in allres:
+            if state != "Stable" and state != "Unstable":
+                for config, eq in allres[state]:
+                    out.write(f"{state}: s={config[0]:.3f}, h={config[1]:.3f}, eq={eq:.4f}\n")
+            else:
+                for config, eq, slope in allres[state]:
+                    out.write(f"{state}: s={config[0]:.3f}, h={config[1]:.3f}, eq={eq:.4f}, slope = {slope:.5f}\n")
+    return allres
+
+
+def plot_all_ngd(allres, q_init):
+    fig, ax = plt.subplots()
+    # state = 'Unstable'
+    for state in allres.keys():
+        unstable_configurations = allres[state]
+        s_values = [config[0][0] for config in unstable_configurations]
+        h_values = [config[0][1] for config in unstable_configurations]
+        eq_values = [max(0, min(1, config[1])) for config in unstable_configurations]
+
+        if eq_values:
+            norm = mcolors.Normalize(0.0, 1.0)
+            cmap = plt.cm.get_cmap('viridis')
+            ax.scatter(s_values, h_values, c=eq_values, cmap=cmap, s=50, norm=norm)
+
+    cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
+    cbar.set_label('Allele Frequency at Eq')
+
+    ax.set_xlabel('Selection Coefficient (s)', fontsize=12)
+    ax.set_ylabel('Dominance (h)', fontsize=12)
+    ax.set_title(f"NGD Final Phase Partition (q_init={q_init})", fontsize=14)
+    ax.set_aspect('equal')
+    plt.grid(True)
+    plt.savefig(f"plot_partition/NGD_partition_sim_q{q_init}.jpg", dpi=600)
+    plt.close()
+
+
 def main():
     s=0.6
     c=0.6
-    h=0.9
+    h=0.8
     q_init=0.001
     regime = 'Fixation'
     params = {'config':(s, c, h), 'q0':q_init, 'conversion': "gametic"}
@@ -278,10 +371,20 @@ def main():
     #     if state == regime:  ### change state check
     #         for config, eq_val in allres[state]:
     #             f_out.write(f"(s, c, h) = {config}\t\teq = {eq_val}\n")
-    # # plot_regions(allres, regime, params['conversion'])
+    # plot_regions(allres, regime, params['conversion'])
     
-    # plot_all(allres, params['conversion'])
-    dfunc = compute_lambda()
+
+    ### PLOT NGD PARTITION
+    q_init = 0.001
+    file = f"ngd_sim_stability_q{q_init}.pickle"
+    allres_ngd = runall_ngd(q_init)
+    save_pickle(file, allres_ngd)
+
+    allres_ngd = load_pickle(file)
+
+    plot_all_ngd(allres_ngd, q_init)
+    # plot_all(allres, params)
+    # dfunc = compute_lambda()
     # params = {'config': (0.5,0.3,0.3), 'q0': 0.001, 'conversion': 'gametic'}
     # eq = get_eq(params)['q3']
     # h_ngd = eq/(2*eq-1)
