@@ -65,8 +65,9 @@ def plot_ngd(h):
     #     ngd_res = pickle.load(f1)
     # params = {'s': 0.4, 'c': 0.4, 'h': 0.5, 'target_steps': 100, 'q0': 0.1}
     # res = run_model(params)
-    res = wm(0.8, h, 40000, 0.5)
+    res = wm(0.0, h, 40000, 0.01)
     mut = res['q']
+    print(h, mut, res['state'])
     # plt.plot(wt, color = 'orange', label = 'wild-type')
     plt.plot(np.arange(0, len(mut)), mut, color = 'blue', label = 'mutant')
     # plt.ylabel('Allele Frequency')
@@ -77,7 +78,7 @@ def plot_ngd(h):
     # plt.show()
 
 def plot_ngds():
-    h_range = np.arange(-10, 10, 1)
+    h_range = np.arange(0, 1, 0.1)
     for h in h_range:
         plot_ngd(h)
     plt.ylabel('Allele Frequency')
@@ -87,7 +88,7 @@ def plot_ngds():
     plt.legend(title='Allele', bbox_to_anchor=(0.8, 0.5), loc='center left')
     plt.show()
 
-plot_ngds()
+# plot_ngds()
 
 def plot_gd(ts, tc):
     colormaps = ['Greys', 'Reds', 'YlOrBr', 'Oranges', 'PuRd', 'BuPu',
@@ -732,7 +733,7 @@ def plot_qmaps(currH):
         color1 = cmap1(norm(q_init))
         # color2 = cmap2(norm(q_init))
         plt.plot(np.arange(0, len(gd_curve)), gd_curve, marker = 'o', linestyle = '-', markersize=3, color = color1, label = f"GD q_init={q_init}, s = {gd_s}, c = {gd_c}, h = {gd_h}")
-        plt.plot(np.arange(0, len(ngd_curve)), ngd_curve, marker = 's', linestyle = '--', markersize=3, color = color1, label = f"NGD q_init={q_init}, s = {ngd_s}, h = {ngd_h}")
+        plt.plot(np.arange(0, len(ngd_curve)), ngd_curve, linestyle = '--', markersize=3, color = color1, label = f"NGD q_init={q_init}, s = {ngd_s}, h = {ngd_h}")
     # for i, (gd_params, data_points) in enumerate(curves.items()):
     #     q_vals = [dp[0] for dp in data_points]
     #     s_vals = [dp[1] for dp in data_points]
@@ -747,6 +748,177 @@ def plot_qmaps(currH):
     plt.tight_layout()
     plt.show()
 
+'''
+Plot mapping results from fixation mapping
+Fix h, s, and c on x-axis, plot s_ngd vs c and h_ngd vs c
+'''
+def plot_fixation_res(currH):
+    fixed_vars = {1, 2}
+    PARAM_V = 1
+    PARAM0 = sorted(fixed_vars)[0]
+    PARAM1 = sorted(fixed_vars)[1]
+    print(f"fixed vars: {PARAM0}, {PARAM1}, varied param: {PARAM_V}")
+    NGD_p = r"$S_{NGD}$" # y-axis
+    allvars = {0, 1, 2}
+    x_param = list(allvars - fixed_vars)[0]
+    print("x_param:", x_param)
+    plt.figure(figsize=(8, 7))
+    color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-# plot_msedl((0.7, 0.4, 0.3))
-# plot_eq_lambda((0.2, 0.1, 0.3))
+    # for different C_GD
+    for currH in [0.0, 0.3, 0.5, 0.8]:
+        print("currH", currH)
+        c_vals = []
+        coeffs = [] # all (slope, intercept) for different PARAM_V
+        for idx, var in enumerate(np.arange(0.1, 1.0, 0.1)):
+        
+            # get grid mapp results 
+            gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
+            # gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
+            gridResult_diploid = load_pickle(f"h{currH}_grid_fix001_G.pickle") # all hap grid results
+            # gridResult = load_pickle(f"h{currH}_hap_grid_G_fix.pickle")
+
+            gd_configs, gd_res = gd_results[0], gd_results[1]
+
+            # sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
+            sMap_grid_diploid, wms_grid_diploid = gridResult_diploid['map'], gridResult_diploid['ngC']
+            # print(sMap_grid)
+            # sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
+
+            # Store c, s_ngd, h_ngd values
+            x_vals = []
+            s_ngd_vals = []
+            h_ngd_vals = []
+            stability = load_pickle(f"h{currH}_gametic_stability_res.pickle")
+
+            for i, config in enumerate(gd_configs):
+                s_gd, c_gd, h_gd = config
+                pl = [s_gd, c_gd, h_gd]
+
+                if math.isclose(pl[PARAM1], float(currH)) and math.isclose(pl[PARAM_V], var): # check if h and c are correct
+                    if (tuple(pl), 1.0) in stability['Fixation']:
+                        # print(s_gd, c_gd, h_gd)
+                        # print("find fixation with required parameters")
+                        if (s_gd, c_gd, h_gd) in sMap_grid_diploid:
+                            # print("also in smap_grid result")
+                            x_vals.append(pl[x_param]) # store s (x_axis)
+
+                            # mapped selection and dominance values from grid
+                            mapped_params = sMap_grid_diploid[(s_gd, c_gd, h_gd)] 
+                            # print(mapped_params)
+                            s_ngd_vals.append(mapped_params[0])
+                            h_ngd_vals.append(mapped_params[1])
+
+            # Sort by c for cleaner plotting
+            sorted_indices = np.argsort(x_vals)
+            x_vals = np.array(x_vals)[sorted_indices]
+            s_ngd_vals = np.array(s_ngd_vals)[sorted_indices]
+            h_ngd_vals = np.array(h_ngd_vals)[sorted_indices]
+
+            # Plot
+            param_strings = [r"S_{GD}", r"C_{GD}", r"H_{GD}"]
+            color = color_cycle[idx % len(color_cycle)]
+
+            # Fit a linear regression line: y = mx + b
+            if x_param == 0 and 'S' in NGD_p:
+                # plt.scatter(x_vals, s_ngd_vals, color=color, alpha=0.6)
+                if len(x_vals) >= 2:  # only fit if enough points
+                    slope, intercept = np.polyfit(x_vals, s_ngd_vals, 1)
+                    coeffs.append([slope, intercept])
+                    c_vals.append(var)
+                    x_fit = np.linspace(min(x_vals), max(x_vals), 100)
+                    y_fit = slope * x_fit + intercept
+                    # plt.plot(x_fit, y_fit, linestyle='--', color=color, label=f"${param_strings[PARAM_V]}$ = {var:.3f}, slope = {slope:.2f}")
+            else: 
+                y_vals = h_ngd_vals if 'H' in NGD_p else s_ngd_vals
+                plt.plot(x_vals, y_vals, label=f"{param_strings[PARAM_V]} = {var:.3f}", marker='o')
+            # plt.plot(x_vals, h_ngd_vals, label=r'$h_{NGD}$', marker='s')
+        slopes = [ce[0] for ce in coeffs]
+        print("c_vals:", c_vals, "slopes", slopes)
+        plt.plot(c_vals, slopes, label=f"${param_strings[2]}$ = {currH:.2f}", marker = 'o')
+    plt.xlabel(f'${param_strings[1]}$ in Gene Drive model', fontsize=14)
+    plt.ylabel(f'Slope of Mapped {NGD_p} over ${param_strings[0]}$', fontsize=14)
+    plt.title(f"{NGD_p} Slope vs. ${param_strings[1]}$ over differnt ${param_strings[2]}$", fontsize=16)
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"plots_fixation/slope_varH_xC_y{NGD_p}_h{currH}.jpg", dpi=600)
+    plt.close()
+
+    # plt.xlabel(f'${param_strings[x_param]}$ in Gene Drive model', fontsize=14)
+    # plt.ylabel(f'Mapped {NGD_p}', fontsize=14)
+    # plt.title(f"Mapped {NGD_p} vs. ${param_strings[x_param]}$ for different ${param_strings[PARAM_V]}$ at ${param_strings[PARAM1]}$ = {currH}", fontsize=16)
+    # plt.legend()
+    # plt.grid(True)
+    # plt.tight_layout()
+    # # plt.show()
+    # plt.savefig(f"plots_fixation/fixation_var${param_strings[PARAM_V]}$_x${param_strings[x_param]}$_y{NGD_p}_h{currH}.jpg", dpi=600)
+    # plt.close()
+
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+import numpy as np
+import math
+
+def plot_fixation_surface(currH):
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
+    gridResult_diploid = load_pickle(f"h{currH}_grid_fix001_G_unstable.pickle")
+    stability = load_pickle(f"h{currH}_gametic_stability_res.pickle")
+
+    gd_configs, _ = gd_results
+    sMap_grid_diploid = gridResult_diploid['map']
+
+    s_gd_vals = []
+    c_gd_vals = []
+    s_ngd_vals = []
+    h_ngd_vals = []
+
+    for config in gd_configs:
+        s_gd, c_gd, h_gd = config
+
+        if not math.isclose(h_gd, float(currH)):
+            continue
+
+        if ((s_gd, c_gd, h_gd), 1.0) not in stability['Fixation']:
+            continue
+
+        if (s_gd, c_gd, h_gd) not in sMap_grid_diploid:
+            continue
+
+        mapped_params = sMap_grid_diploid[(s_gd, c_gd, h_gd)]
+        s_ngd = mapped_params[0]
+        h_ngd = mapped_params[1]
+
+        s_gd_vals.append(s_gd)
+        c_gd_vals.append(c_gd)
+        s_ngd_vals.append(s_ngd)
+        h_ngd_vals.append(h_ngd)
+
+    # Convert to arrays for plotting
+    s_gd_vals = np.array(s_gd_vals)
+    c_gd_vals = np.array(c_gd_vals)
+    s_ngd_vals = np.array(s_ngd_vals)
+    h_ngd_vals = np.array(h_ngd_vals)
+
+    # Plot the points
+    sc = ax.scatter(s_gd_vals, c_gd_vals, h_ngd_vals, c=h_ngd_vals, cmap='Spectral', marker='o')
+    fig.colorbar(sc, ax=ax, pad=0.1, shrink=0.5, label=r'$H_{NGD}$')
+
+    ax.view_init(elev=5, azim=200)
+
+    ax.set_xlabel(r'$S_{GD}$', fontsize=12)
+    ax.set_ylabel(r'$C_{GD}$', fontsize=12)
+    ax.set_zlabel(r'$H_{NGD}$', fontsize=12)
+    ax.set_title(fr"Mapped $H_{{NGD}}$ surface for $H_{{GD}} = {currH}$", fontsize=14)
+
+    plt.tight_layout()
+    plt.savefig(f"plots_fixation/3d_surface_hngd_h{currH}.jpg", dpi=600)
+    plt.close()
+
+
+
+    # plot_msedl((0.7, 0.4, 0.3))
+    # plot_eq_lambda((0.2, 0.1, 0.3))
