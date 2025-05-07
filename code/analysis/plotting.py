@@ -6,6 +6,7 @@ from matplotlib import cm
 import math
 import pickle
 import os, sys
+import pandas as pd, statsmodels.formula.api as smf
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -366,7 +367,7 @@ def plot_mapping(currH):
     # loading results
     gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
     # gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
-    gridResult_diploid = load_pickle(f"h{currH}_grid_G_fix.pickle") # all hap grid results
+    gridResult_diploid = load_pickle(f"h{currH}_grid_fix001_G.pickle") # all hap grid results
     gridResult = load_pickle(f"h{currH}_hap_grid_G_fix.pickle")
 
     gd_configs, gd_res = gd_results[0], gd_results[1]
@@ -378,7 +379,7 @@ def plot_mapping(currH):
     plt.figure(figsize = (15, 7))
 
     for (s, c, h) in gd_configs:
-        if (math.isclose(s, 0.4) and math.isclose(c, 0.4)):
+        if (math.isclose(s, 0.75) and math.isclose(c, 0.6)):
         # if s < c and math.isclose(s, 0.1):
             # plot grid (hap/diploid?)
             if (s, c, h) in sMap_grid and type(sMap_grid[(s,c,h)]) != tuple:
@@ -399,7 +400,7 @@ def plot_mapping(currH):
                 # i = list(sMap_grid_diploid.keys()).index((s, c, h))
                 wm_curve_grid = wm(best_s_grid, best_h_grid, 40000, 0.001)['q']
                 time1 = np.arange(0, len(wm_curve_grid))
-                plt.plot(time1, wm_curve_grid, marker = 'o', color = w_color0, markersize=3, linestyle = '-', label = f'grid search diploid NGD (s = {best_s_grid:.3f}, h = {best_h_grid:.3f})')
+                # plt.plot(time1, wm_curve_grid, marker = 'o', color = w_color0, markersize=3, linestyle = '-', label = f'grid search diploid NGD (s = {best_s_grid:.3f}, h = {best_h_grid:.3f})')
 
             # PLOT GRADIENT (HAP/DIPLOID)
             # cmap2 = plt.get_cmap('GnBu') # grid mapping curves
@@ -430,9 +431,9 @@ def plot_mapping(currH):
             # PLOT HAPSE
             paramSe = {'s':s, 'c':c, 'n': 500, 'h': h, 'target_steps': 40000, 'q0': 0.001}
             se = h*s-c+c*h*s
-            hapSe = haploid_se(paramSe)['q']
-            cmapSe = plt.get_cmap("Oranges")
-            se_color = cmapSe(0.75) # original gene-drive curve
+            # hapSe = haploid_se(paramSe)['q']
+            # cmapSe = plt.get_cmap("Oranges")
+            # se_color = cmapSe(0.75) # original gene-drive curve
 
             # nearby = []
             # for hnew in np.arange(best_h_grid-0.2, best_h_grid+0.3, 0.1):
@@ -443,12 +444,12 @@ def plot_mapping(currH):
             #     plt.plot(time, newc, marker = 'o', color = h_color, markersize=3, linestyle = '-', label = f"NGD s = {'%.3f' % best_s_grid}, h = {'%.3f' % hnew}")      
 
             time = np.arange(0, len(gd_res[(s, c, h)]['q']))
-            time_se = np.arange(0, len(hapSe))
+            # time_se = np.arange(0, len(hapSe))
             time3 = np.arange(0, len(gd_res[(s, c, h)]['q'])-1)
             print("plotting gd and mapped curves")
 
             plt.plot(time, gd_res[(s, c, h)]['q'], color = gd_color, label = f"s = {s}, c = {c}, h = {h}")
-            plt.plot(time_se, hapSe, marker = 'o', color = se_color, markersize=3, label = f"haploid using Se (s = {'%.3f'%se})")
+            # plt.plot(time_se, hapSe, marker = 'o', color = se_color, markersize=3, label = f"haploid using Se (s = {'%.3f'%se})")
             # plt.plot(time3, gd_res[(s, c, h)]['w_bar'], color = 'b', label = f"wbar for s = {s}, c = {c}, h = {h}")
 
 
@@ -766,16 +767,17 @@ def plot_fixation_res(currH):
     color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
     # for different C_GD
-    for currH in [0.0, 0.3, 0.5, 0.8]:
+    for currH in [0.0]:
         print("currH", currH)
-        c_vals = []
+        var_vals = []
         coeffs = [] # all (slope, intercept) for different PARAM_V
+        records = [] # all (c, s, s_ngd) for different PARAM_V
         for idx, var in enumerate(np.arange(0.1, 1.0, 0.1)):
         
             # get grid mapp results 
-            gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
+            gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdresG.pickle")
             # gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
-            gridResult_diploid = load_pickle(f"h{currH}_grid_fix001_G.pickle") # all hap grid results
+            gridResult_diploid = load_pickle(f"h{currH}_grid_G_fix.pickle") # all diploid grid results
             # gridResult = load_pickle(f"h{currH}_hap_grid_G_fix.pickle")
 
             gd_configs, gd_res = gd_results[0], gd_results[1]
@@ -800,20 +802,27 @@ def plot_fixation_res(currH):
                         # print(s_gd, c_gd, h_gd)
                         # print("find fixation with required parameters")
                         if (s_gd, c_gd, h_gd) in sMap_grid_diploid:
+                            if math.isclose(s_gd, 0.75) and math.isclose(c_gd, 0.6) and math.isclose(h_gd, 0.5):
+                                continue
                             # print("also in smap_grid result")
                             x_vals.append(pl[x_param]) # store s (x_axis)
 
                             # mapped selection and dominance values from grid
                             mapped_params = sMap_grid_diploid[(s_gd, c_gd, h_gd)] 
                             # print(mapped_params)
-                            s_ngd_vals.append(mapped_params[0])
-                            h_ngd_vals.append(mapped_params[1])
+                            s_ngd, h_ngd = mapped_params[0], mapped_params[1]
+                            s_ngd_vals.append(s_ngd)
+                            h_ngd_vals.append(h_ngd)
+                            records.append((c_gd, s_gd, s_ngd))
 
             # Sort by c for cleaner plotting
             sorted_indices = np.argsort(x_vals)
             x_vals = np.array(x_vals)[sorted_indices]
             s_ngd_vals = np.array(s_ngd_vals)[sorted_indices]
             h_ngd_vals = np.array(h_ngd_vals)[sorted_indices]
+            # 2)  load records into a NumPy array and sort by c_GD once
+            arr = np.asarray(records)                  
+            c_vals  = np.unique(arr[:,0])
 
             # Plot
             param_strings = [r"S_{GD}", r"C_{GD}", r"H_{GD}"]
@@ -821,39 +830,145 @@ def plot_fixation_res(currH):
 
             # Fit a linear regression line: y = mx + b
             if x_param == 0 and 'S' in NGD_p:
-                # plt.scatter(x_vals, s_ngd_vals, color=color, alpha=0.6)
+                plt.scatter(x_vals, s_ngd_vals, color=color, alpha=0.6)
                 if len(x_vals) >= 2:  # only fit if enough points
                     slope, intercept = np.polyfit(x_vals, s_ngd_vals, 1)
                     coeffs.append([slope, intercept])
-                    c_vals.append(var)
+                    var_vals.append(var)
                     x_fit = np.linspace(min(x_vals), max(x_vals), 100)
                     y_fit = slope * x_fit + intercept
-                    # plt.plot(x_fit, y_fit, linestyle='--', color=color, label=f"${param_strings[PARAM_V]}$ = {var:.3f}, slope = {slope:.2f}")
+                    plt.plot(x_fit, y_fit, linestyle='--', color=color, label=f"${param_strings[PARAM_V]}$ = {var:.3f}, slope = {slope:.2f}")
             else: 
                 y_vals = h_ngd_vals if 'H' in NGD_p else s_ngd_vals
                 plt.plot(x_vals, y_vals, label=f"{param_strings[PARAM_V]} = {var:.3f}", marker='o')
-            # plt.plot(x_vals, h_ngd_vals, label=r'$h_{NGD}$', marker='s')
-        slopes = [ce[0] for ce in coeffs]
-        print("c_vals:", c_vals, "slopes", slopes)
-        plt.plot(c_vals, slopes, label=f"${param_strings[2]}$ = {currH:.2f}", marker = 'o')
-    plt.xlabel(f'${param_strings[1]}$ in Gene Drive model', fontsize=14)
-    plt.ylabel(f'Slope of Mapped {NGD_p} over ${param_strings[0]}$', fontsize=14)
-    plt.title(f"{NGD_p} Slope vs. ${param_strings[1]}$ over differnt ${param_strings[2]}$", fontsize=16)
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(f"plots_fixation/slope_varH_xC_y{NGD_p}_h{currH}.jpg", dpi=600)
-    plt.close()
+        # plt.plot(x_vals, h_ngd_vals, label=r'$h_{NGD}$', marker='s')
 
-    # plt.xlabel(f'${param_strings[x_param]}$ in Gene Drive model', fontsize=14)
-    # plt.ylabel(f'Mapped {NGD_p}', fontsize=14)
-    # plt.title(f"Mapped {NGD_p} vs. ${param_strings[x_param]}$ for different ${param_strings[PARAM_V]}$ at ${param_strings[PARAM1]}$ = {currH}", fontsize=16)
+        plt.xlabel(f'${param_strings[x_param]}$ in Gene Drive model', fontsize=14)
+        plt.ylabel(f'Mapped {NGD_p}', fontsize=14)
+        plt.title(f"Mapped {NGD_p} vs. ${param_strings[x_param]}$ for different ${param_strings[PARAM_V]}$ at ${param_strings[PARAM1]}$ = {currH}", fontsize=16)
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+        plt.savefig(f"plots_fixation/fixation_var${param_strings[PARAM_V]}$_x${param_strings[x_param]}$_y{NGD_p}_h{currH}.jpg", dpi=600)
+        plt.close()
+
+        # plt.figure(figsize=(8, 7))
+        ### Plotting slopes and intercepts
+        slopes = [ce[0] for ce in coeffs]
+        intercepts = [ce[1] for ce in coeffs]
+        print("c_vals:", var_vals, "slopes", slopes, "intercepts", intercepts)
+        # plt.plot(var_vals, slopes, label=f"${param_strings[2]}$ = {currH:.2f}", marker = 'o')
+        # plt.plot(var_vals, intercepts, label=f"${param_strings[2]}$ = {currH:.2f}", marker = 'x')
+    # plt.xlabel(f'${param_strings[1]}$ in Gene Drive model', fontsize=14)
+    # plt.ylabel(f'Slopes of Mapped {NGD_p} over ${param_strings[0]}$', fontsize=14)
+    # plt.title(f"{NGD_p} Slopes vs. ${param_strings[1]}$ over differnt ${param_strings[2]}$", fontsize=16)
     # plt.legend()
     # plt.grid(True)
     # plt.tight_layout()
-    # # plt.show()
-    # plt.savefig(f"plots_fixation/fixation_var${param_strings[PARAM_V]}$_x${param_strings[x_param]}$_y{NGD_p}_h{currH}.jpg", dpi=600)
+    # plt.savefig(f"plots_fixation/slope_varH_xC_y{NGD_p}_h{currH}.jpg", dpi=600)
     # plt.close()
+
+    # calculate coefficients a and b for a*s_gd + b
+        df = pd.DataFrame(records, columns=['c','S_GD','S_NGD'])
+        # 1) precompute polynomial columns
+        df['c2'] = df['c']**2
+        # df['c3'] = df['c']**3
+
+        # 2) fit with S_GD interactions on each power of c
+        formula = '''
+        S_NGD ~ 
+            S_GD 
+        + c + c2
+        + S_GD:c
+        '''
+        res = smf.ols(formula, data=df).fit()
+        print(res.summary())
+        print(res.params)
+        save_pickle(f"regression/h{currH}_mapping_coeffs.pickle", res.params)
+
+def test_mapping_trajectory(s_gd, c_gd, h_gd,
+                             param_file,
+                             file_type='json',
+                             target_steps=40000,
+                             q0=0.001,
+                             show=True):
+    """
+    1) Load saved linear-regression coefficients from `param_file` (pickle).
+    2) Compute s_ngd and h_ngd from the loaded params.
+    3) Run both trajectories and plot them together.
+    """
+
+    # --- 1) Load the fitted model parameters ------------------------
+    res = load_pickle(param_file) if file_type == 'pickle' else None
+    coeffs = res.to_dict()
+
+    # --- 2) Compute mapped parameters from the regression ------------
+    # Basic terms:
+    intercept = coeffs.get('Intercept', 0.0)
+    a_s      = coeffs.get('S_GD',    0.0)   # slope coef on S_GD
+    a_c      = coeffs.get('c',       0.0)   # slope coef on c
+    a_sc     = coeffs.get('S_GD:c',  0.0)   # interaction term
+    a_c2    = coeffs.get('c2',      0.0)   # slope coef on c^2
+
+    # compute S_NGD
+    s_ngd = (
+        intercept
+      + a_s   * s_gd
+      + a_c   * c_gd
+      + a_sc  * s_gd * c_gd
+      + a_c2  * c_gd**2
+    )
+
+    # Compute H_NGD
+    if s_ngd != 0:
+        h_ngd = (1 - (1 - h_gd*s_gd)*(1 + c_gd)) / s_ngd
+        if h_ngd < 0:
+            h_ngd = 0
+        elif h_ngd > 1:
+            h_ngd = 1
+    else:
+        h_ngd = h_gd
+
+    # --- 3) Generate trajectories -----------------------------------
+    # GD trajectory
+    gd_params = {
+        's': s_gd,
+        'c': c_gd,
+        'h': h_gd,
+        'target_steps': target_steps,
+        'q0': q0
+    }
+    traj_gd = run_model(gd_params)['q']
+
+    # NGD trajectory
+    traj_ngd = wm(s_ngd, h_ngd, target_steps, q0)['q']
+
+    # --- 4) Plot comparison -----------------------------------------
+    plt.figure(figsize=(8,5))
+    gd_generations = list(range(len(traj_gd)))
+    ngd_generations = list(range(len(traj_ngd)))
+    plt.plot(gd_generations, traj_gd, label=f'GD: s={s_gd:.3f}, c={c_gd:.3f}, h={h_gd:.3f}')
+    plt.plot(ngd_generations, traj_ngd, 
+             label=f'NGD: s_ngd={s_ngd:.3f}, h_ngd={h_ngd:.3f}', 
+             linestyle='--')
+
+    plt.xlabel('Generation')
+    plt.ylabel('Allele frequency  q(t)')
+    plt.title('GD vs NGD Trajectories')
+    plt.legend()
+    plt.grid(True)
+    if show:
+        plt.show()
+
+    # also return data if you need to compute MSE or other metrics
+    return {
+        'traj_gd': traj_gd,
+        'traj_ngd': traj_ngd,
+        's_ngd': s_ngd,
+        'h_ngd': h_ngd
+    }
+
 
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt

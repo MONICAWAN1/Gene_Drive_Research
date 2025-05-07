@@ -89,7 +89,7 @@ def haploid(params):
             final = t+1
             break
 
-    state = checkState(final, freqs, params)
+    state = checkState(final, freqs)
     if state == None: print('none', freqs[t], freqs[t+1])
 
     return {'q': freqs[:final], 'p': wtfreqs[:final], 'w_bar': w[:final-1], 'state': state}
