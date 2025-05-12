@@ -14,9 +14,14 @@
 __pycache__/
 *.pyc
 *.pyo
+*.jpg
 
 /venv/
 
 # Ignore large pickle files
 code/pickle/allgdres001.pickle
 code/pickle/allngdres.pickle
+
+*.zip
+*.tar
+.DS_Store
