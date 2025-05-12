@@ -767,7 +767,7 @@ def plot_fixation_res(currH):
     color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
     # for different C_GD
-    for currH in [0.0]:
+    for currH in [0.0, 0.5, 0.8]:
         print("currH", currH)
         var_vals = []
         coeffs = [] # all (slope, intercept) for different PARAM_V
@@ -880,12 +880,12 @@ def plot_fixation_res(currH):
         S_NGD ~ 
             S_GD 
         + c + c2
-        + S_GD:c
+        + S_GD:c + S_GD:c2
         '''
         res = smf.ols(formula, data=df).fit()
         print(res.summary())
         print(res.params)
-        save_pickle(f"regression/h{currH}_mapping_coeffs.pickle", res.params)
+        save_pickle(f"regression/h{currH}_mapping_coeffs_sq.pickle", res.params)
 
 def test_mapping_trajectory(s_gd, c_gd, h_gd,
                              param_file,
@@ -902,6 +902,7 @@ def test_mapping_trajectory(s_gd, c_gd, h_gd,
     # --- 1) Load the fitted model parameters ------------------------
     res = load_pickle(param_file) if file_type == 'pickle' else None
     coeffs = res.to_dict()
+    print('coeffs:', coeffs)
 
     # --- 2) Compute mapped parameters from the regression ------------
     # Basic terms:
@@ -910,6 +911,7 @@ def test_mapping_trajectory(s_gd, c_gd, h_gd,
     a_c      = coeffs.get('c',       0.0)   # slope coef on c
     a_sc     = coeffs.get('S_GD:c',  0.0)   # interaction term
     a_c2    = coeffs.get('c2',      0.0)   # slope coef on c^2
+    a_sc2   = coeffs.get('S_GD:c2', 0.0)   # interaction term
 
     # compute S_NGD
     s_ngd = (
@@ -918,8 +920,9 @@ def test_mapping_trajectory(s_gd, c_gd, h_gd,
       + a_c   * c_gd
       + a_sc  * s_gd * c_gd
       + a_c2  * c_gd**2
+      + a_sc2 * s_gd * c_gd**2
     )
-
+    print(s_ngd)
     # Compute H_NGD
     if s_ngd != 0:
         h_ngd = (1 - (1 - h_gd*s_gd)*(1 + c_gd)) / s_ngd
@@ -929,6 +932,8 @@ def test_mapping_trajectory(s_gd, c_gd, h_gd,
             h_ngd = 1
     else:
         h_ngd = h_gd
+    
+    print(h_ngd)
 
     # --- 3) Generate trajectories -----------------------------------
     # GD trajectory

@@ -37,8 +37,8 @@ def main():
     if args.plot_function in plot_functions:
         print(f"Running {args.plot_function}...")
         if args.plot_function == "test_mapping_trajectory":
-            s_gd, c_gd, h_gd = 0.19, 0.21, float(args.h_val)
-            plot_functions[args.plot_function](s_gd, c_gd, h_gd, param_file=f'regression/h{args.h_val}_mapping_coeffs.pickle',file_type='pickle')
+            s_gd, c_gd, h_gd = 0.03, 0.73, float(args.h_val)
+            plot_functions[args.plot_function](s_gd, c_gd, h_gd, param_file=f'regression/h{args.h_val}_mapping_coeffs_sq.pickle',file_type='pickle')
         else: 
             plot_functions[args.plot_function](args.h_val)
     else:

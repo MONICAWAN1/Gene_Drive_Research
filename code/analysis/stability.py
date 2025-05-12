@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib import cm
 import sys, os
+import pandas as pd
 
 import sympy as sp
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -227,31 +228,96 @@ def plot_regions(allres, state, conversion):
 #######################################################################################
 # NGD stability 
 #######################################################################################
+
+
+# ────────────────────────────
+# Scan grid, compute stability & second derivative at each eq
+# ────────────────────────────
+
+def compute_ngd_stability_grid(s_range, h_range):
+    """
+    Returns a DataFrame with columns:
+      s, h, q_eq, f1 (dq'/dq), f2 (d^2 q'/dq^2), regime
+    """
+    rows = []
+    for s_val in s_range:
+        for h_val in h_range:
+            # find interior equilibria
+            eqs = get_eq_ngd(s_val, h_val)
+            
+            # if no interior eq, treat q=0 or q=1 as regimes
+            if not eqs:
+                # classify loss/fixation regimes
+                q_init = 0.001
+                res = wm(s_val, h_val, 40000, q_init)
+                res_state = res['state'] 
+                if res_state == 'loss':
+                    regime = 'loss'
+                elif res_state == 'fix':
+                    regime = 'fixation'
+                rows.append({
+                    's': s_val, 'h': h_val,
+                    'q_eq':   0.0 if regime == 'loss' else 1.0,
+                    'f1':     f1_num(0.0, s_val, h_val),
+                    'f2':     f2_num(0.0, s_val, h_val),
+                    'regime': regime
+                })
+                continue
+
+            # otherwise each interior eq
+            # print(f"Computing stability for s={s_val}, h={h_val}, eqs={eqs}")
+            for q_eq in eqs:
+                f1_val = f1_num(q_eq, s_val, h_val)
+                f2_val = f2_num(0, s_val, h_val)
+                # classify stability
+                if abs(f1_val) < 1:
+                    regime = 'stable'
+                elif abs(f1_val) > 1:
+                    regime = 'unstable'
+                else:
+                    regime = 'neutral'
+                rows.append({
+                    's':     s_val,
+                    'h':     h_val,
+                    'q_eq':  q_eq,
+                    'f1':    f1_val,
+                    'f2':    f2_val,
+                    'regime':regime
+                })
+    return pd.DataFrame(rows)
+
+
 def compute_lambda():
-# Define symbols
     q, s, h = sp.symbols('q s h')
 
-    # Define numerator and denominator
-    numerator = q**2 * (1 - s) + q * (1 - q) * (1 - h * s)
-    wbar = q**2 * (1 - s) + 2 * q * (1 - q) * (1 - h * s) + (1 - q)**2
+    numer = q**2*(1 - s) + q*(1 - q)*(1 - h*s)
+    wbar = q**2*(1 - s) + 2*q*(1 - q)*(1 - h*s) + (1 - q)**2
+    q_next = numer / wbar
 
-    # Define q(t+1)
-    q_next = numerator / wbar
+    # 1st and 2nd derivatives wrt q
+    f1 = sp.simplify(sp.diff(q_next, q))
+    f2 = sp.simplify(sp.diff(f1, q))
 
-    # Compute the derivative ∂q(t+1)/∂q(t)
-    dq_next_dq = sp.simplify(sp.diff(q_next, q))
+    # the polynomial whose roots are the equilibria:
+    #   solve numer/q_next - q = 0  ⇒  numer - q*wbar = 0
+    poly_eq = sp.simplify(sp.expand(numer - q*wbar))
+    poly_q  = sp.Poly(poly_eq, q)
+    coeffs  = poly_q.all_coeffs()      # [a2(s,h), a1(s,h), a0(s,h)]
 
-    dq_dq_func = sp.lambdify((s, h, q), dq_next_dq, "numpy")
+    # lambdify everything
+    f1_num       = sp.lambdify((q, s, h), f1,  'numpy')
+    f2_num       = sp.lambdify((q, s, h), f2,  'numpy')
+    coef_funcs   = [sp.lambdify((s,h), c, 'numpy') for c in coeffs]
 
     # Print the simplified result
-    sp.pprint(dq_next_dq)
-    return dq_dq_func
+    sp.pprint(f1_num)
+    return coef_funcs, f1_num, f2_num
 
-dfunc_ngd = compute_lambda()
+coef_funcs, f1_num, f2_num = compute_lambda()
 
-def get_ngd_stability(s, h, q, dfunc_ngd):
+def get_ngd_stability(s, h, q, f1_num):
     try:
-        slope = dfunc_ngd(s, h, q)
+        slope = f1_num(s, h, q)
     except ZeroDivisionError:
         slope = 'NA'
         print(f"Division by zero: config = {(s, h, q)}")
@@ -261,92 +327,176 @@ def get_ngd_stability(s, h, q, dfunc_ngd):
 Given the NGD parameter (s, h), return the stable eq
 '''
 def get_eq_ngd(s, h):
+    # a2 = coef_funcs[0](s_val, h_val)
+    # a1 = coef_funcs[1](s_val, h_val)
+    # a0 = coef_funcs[2](s_val, h_val)
+    # roots = np.roots([a2, a1, a0])
+    # # filter real roots in (0,1)
+    # real_roots = roots[np.isreal(roots)].real
+    # for r in real_roots:
+    #     if math.isclose(r, 0.0) or math.isclose(r, 1.0):
+    #         real_roots = np.delete(real_roots, np.where(real_roots == r))
+    # return [r for r in real_roots if 0 < r < 1]
     if not math.isclose(h, 0.5):
         if (math.isclose(2*h*s - s, 0.0)):
             print(f'Division by zero: config = {(s, h)}')
-            return 'NA'
-        return (h*s)/(2*h*s - s)
-    return 'NA'
+            return None
+        eq = (h*s)/(2*h*s - s)
+        if eq < 0 or eq > 1 or math.isclose(eq, 0.0) or math.isclose(eq, 1.0):
+            return None
+        else:
+            return [eq]
+    return None
 
 print(get_eq_ngd(-0.2, 0.1))
 
+def plot_ngd_partition(df, q_init=None, save_path=None):
+    """
+    Plot the NGD stability partition from a DataFrame `df` with columns
+      ['s','h','q_eq','f1','f2','regime'].
+    Colors each point by its 'regime' category.
+    """
+    palette = {
+        'loss'      : 'lightgray',
+        'fixation'  : 'black',
+        'stable'    : 'tab:blue',
+        'unstable'  : 'tab:red',
+        'neutral'   : 'tab:orange',
+    }
+    
+    fig, ax = plt.subplots(figsize=(6,6))
+    
+    # scatter with continuous colour = q_eq
+    sc = ax.scatter(
+        df['s'], df['h'],
+        c=df['q_eq'],              # colour by equilibrium frequency
+        cmap='viridis',              # warm → cool dark
+        norm=mcolors.Normalize(vmin=0, vmax=1),
+        s=30,                      # point size
+        # edgecolors='k', lw=0.3,    # black border for clarity
+        alpha=0.8
+    )
 
-def runall_ngd(q_init):
-    allres = {'Stable': [], 'Unstable': [], 'dq=1': [], 'Fixation': [], 'Loss': []}
-    dfunc = compute_lambda()
+    # add colourbar
+    cbar = fig.colorbar(sc, ax=ax, pad=0.02)
+    cbar.set_label('Equilibrium frequency $q_{eq}$', fontsize=12)
 
-    for s in np.arange(-2, 2, 0.1):
-        for h in np.arange(-2, 2, 0.1):
-            s = round(float(s), 3)
-            h = round(float(h), 3)
-            # print(s, h)
-
-            # eq = get_eq_ngd(s, h)
-            eq = wm(s, h, 40000, q_init)['q'][-1]
-
-            if eq != 'NA':
-                # print("getting stability")
-                # print(s, h, eq)
-                slope = get_ngd_stability(s, h, eq, dfunc)
-
-                if eq >= 1 or math.isclose(eq, 1.0):
-                    allres['Fixation'].append(((s, h), 1.0))
-                elif eq <= 0 or math.isclose(eq, 0.0):
-                    allres['Loss'].append(((s, h), 0.0))
-                else:
-                    if slope != 'NA':
-                        if abs(slope) < 1:
-                            allres['Stable'].append(((s, h), eq, slope))
-                        elif abs(slope) > 1:
-                            allres['Unstable'].append(((s, h), eq, slope))
-                        elif math.isclose(slope, 1.0):
-                            allres['dq=1'].append(((s, h), eq))
-            else:
-                print('NO EQ:', s, h)
-                res = wm(s, h, 40000, q_init)
-                res_state = res['state'] 
-                if res_state == 'loss':
-                    allres['Loss'].append(((s, h), 0.0))
-                elif res_state == 'fix':
-                    allres['Fixation'].append(((s, h), 1.0))
-                else:
-                    print(f"Skipping invalid config s={s}, h={h}, final={res['q'][-1]}")
-
-    with open(f"stability_res/NGD_partition_sim_q{q_init}.txt", "w") as out:
-        for state in allres:
-            if state != "Stable" and state != "Unstable":
-                for config, eq in allres[state]:
-                    out.write(f"{state}: s={config[0]:.3f}, h={config[1]:.3f}, eq={eq:.4f}\n")
-            else:
-                for config, eq, slope in allres[state]:
-                    out.write(f"{state}: s={config[0]:.3f}, h={config[1]:.3f}, eq={eq:.4f}, slope = {slope:.5f}\n")
-    return allres
+    # scatter each regime separately so we get a legend
+    # for regime, color in palette.items():
+    #     sub = df[df['regime'] == regime]
+    #     if sub.empty:
+    #         continue
+    #     ax.scatter(
+    #         sub['s'], sub['h'],
+    #         c=color,
+    #         label=regime,
+    #         s=30,
+    #         alpha=0.7,
+    #         edgecolors='k',
+    #         linewidths=0.3
+    #     )
+    
+    # axes labels, title, grid, legend
+    ax.set_xlabel('Selection coefficient $s$', fontsize=12)
+    ax.set_ylabel('Dominance $h$', fontsize=12)
+    
+    title = "NGD Stability Partition by Equilibrium Frequency"
+    if q_init is not None:
+        title += f" (q0={q_init})"
+    ax.set_title(title, fontsize=14)
+    
+    # ax.legend(title='Regime', loc='upper left', fontsize=10)
+    ax.grid(True, linestyle='--', alpha=0.5)
+    ax.set_aspect('equal', 'box')
+    
+    # determine save path
+    if save_path is None:
+        if q_init is not None:
+            save_path = f"plot_partition/NGD_partition_sim_q{q_init}.jpg"
+        else:
+            save_path = "plot_partition/NGD_partition.jpg"
+    
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=600)
+    plt.close(fig)
 
 
-def plot_all_ngd(allres, q_init):
-    fig, ax = plt.subplots()
-    # state = 'Unstable'
-    for state in allres.keys():
-        unstable_configurations = allres[state]
-        s_values = [config[0][0] for config in unstable_configurations]
-        h_values = [config[0][1] for config in unstable_configurations]
-        eq_values = [max(0, min(1, config[1])) for config in unstable_configurations]
+# def runall_ngd(q_init):
+#     allres = {'Stable': [], 'Unstable': [], 'dq=1': [], 'Fixation': [], 'Loss': []}
+#     dfunc = compute_lambda()
 
-        if eq_values:
-            norm = mcolors.Normalize(0.0, 1.0)
-            cmap = plt.cm.get_cmap('viridis')
-            ax.scatter(s_values, h_values, c=eq_values, cmap=cmap, s=50, norm=norm)
+#     for s in np.arange(-2, 2, 0.1):
+#         for h in np.arange(-2, 2, 0.1):
+#             s = round(float(s), 3)
+#             h = round(float(h), 3)
+#             # print(s, h)
 
-    cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
-    cbar.set_label('Allele Frequency at Eq')
+#             # eq = get_eq_ngd(s, h)
+#             eq = wm(s, h, 40000, q_init)['q'][-1]
 
-    ax.set_xlabel('Selection Coefficient (s)', fontsize=12)
-    ax.set_ylabel('Dominance (h)', fontsize=12)
-    ax.set_title(f"NGD Final Phase Partition (q_init={q_init})", fontsize=14)
-    ax.set_aspect('equal')
-    plt.grid(True)
-    plt.savefig(f"plot_partition/NGD_partition_sim_q{q_init}.jpg", dpi=600)
-    plt.close()
+#             if eq != 'NA':
+#                 # print("getting stability")
+#                 # print(s, h, eq)
+#                 slope = get_ngd_stability(s, h, eq, dfunc)
+
+#                 if eq >= 1 or math.isclose(eq, 1.0):
+#                     allres['Fixation'].append(((s, h), 1.0))
+#                 elif eq <= 0 or math.isclose(eq, 0.0):
+#                     allres['Loss'].append(((s, h), 0.0))
+#                 else:
+#                     if slope != 'NA':
+#                         if abs(slope) < 1:
+#                             allres['Stable'].append(((s, h), eq, slope))
+#                         elif abs(slope) > 1:
+#                             allres['Unstable'].append(((s, h), eq, slope))
+#                         elif math.isclose(slope, 1.0):
+#                             allres['dq=1'].append(((s, h), eq))
+#             else:
+#                 print('NO EQ:', s, h)
+#                 res = wm(s, h, 40000, q_init)
+#                 res_state = res['state'] 
+#                 if res_state == 'loss':
+#                     allres['Loss'].append(((s, h), 0.0))
+#                 elif res_state == 'fix':
+#                     allres['Fixation'].append(((s, h), 1.0))
+#                 else:
+#                     print(f"Skipping invalid config s={s}, h={h}, final={res['q'][-1]}")
+
+#     with open(f"stability_res/NGD_partition_sim_q{q_init}.txt", "w") as out:
+#         for state in allres:
+#             if state != "Stable" and state != "Unstable":
+#                 for config, eq in allres[state]:
+#                     out.write(f"{state}: s={config[0]:.3f}, h={config[1]:.3f}, eq={eq:.4f}\n")
+#             else:
+#                 for config, eq, slope in allres[state]:
+#                     out.write(f"{state}: s={config[0]:.3f}, h={config[1]:.3f}, eq={eq:.4f}, slope = {slope:.5f}\n")
+#     return allres
+
+
+# def plot_all_ngd(allres, q_init):
+#     fig, ax = plt.subplots()
+#     # state = 'Unstable'
+#     for state in allres.keys():
+#         unstable_configurations = allres[state]
+#         s_values = [config[0][0] for config in unstable_configurations]
+#         h_values = [config[0][1] for config in unstable_configurations]
+#         eq_values = [max(0, min(1, config[1])) for config in unstable_configurations]
+
+#         if eq_values:
+#             norm = mcolors.Normalize(0.0, 1.0)
+#             cmap = plt.cm.get_cmap('viridis')
+#             ax.scatter(s_values, h_values, c=eq_values, cmap=cmap, s=50, norm=norm)
+
+#     cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
+#     cbar.set_label('Allele Frequency at Eq')
+
+#     ax.set_xlabel('Selection Coefficient (s)', fontsize=12)
+#     ax.set_ylabel('Dominance (h)', fontsize=12)
+#     ax.set_title(f"NGD Final Phase Partition (q_init={q_init})", fontsize=14)
+#     ax.set_aspect('equal')
+#     plt.grid(True)
+#     plt.savefig(f"plot_partition/NGD_partition_sim_q{q_init}.jpg", dpi=600)
+#     plt.close()
 
 
 def main():
@@ -358,6 +508,8 @@ def main():
     params = {'config':(s, c, h), 'q0':q_init, 'conversion': "gametic"}
     filename = f"h{h}_{params['conversion']}_stability_res.pickle"
 
+    ##########################################################
+    # OLD VERSION OF PLOTTING GD PARTITION
     # run through all configurations
     # allres = runall(params)
     # save_pickle(filename, allres) ### change file name
@@ -372,17 +524,7 @@ def main():
     #         for config, eq_val in allres[state]:
     #             f_out.write(f"(s, c, h) = {config}\t\teq = {eq_val}\n")
     # plot_regions(allres, regime, params['conversion'])
-    
-
-    ### PLOT NGD PARTITION
-    q_init = 0.001
-    file = f"ngd_sim_stability_q{q_init}.pickle"
-    allres_ngd = runall_ngd(q_init)
-    save_pickle(file, allres_ngd)
-
-    allres_ngd = load_pickle(file)
-
-    plot_all_ngd(allres_ngd, q_init)
+    #
     # plot_all(allres, params)
     # dfunc = compute_lambda()
     # params = {'config': (0.5,0.3,0.3), 'q0': 0.001, 'conversion': 'gametic'}
@@ -398,6 +540,31 @@ def main():
     #     print("----------------------")
     #     ngd_stat_old = get_ngd_stability_old(s_ngd, h_ngd, eq)
     #     print(f"s_ngd = {s_ngd}, dq_old = {ngd_stat_old}")
+    ##########################################################
+    
+
+    ### PLOT NGD PARTITION
+    q_init = 0.001
+    # file = f"ngd_sim_stability_q{q_init}.pickle"
+    # s_vals = np.round(np.linspace(-2, 2, 81), 3)
+    # h_vals = np.round(np.linspace(-2, 2, 81), 3)
+    # df_stability = compute_ngd_stability_grid(s_vals, h_vals)
+
+    # df_stability.to_csv("stability_res/NGD_stability_partition.csv", index=False)
+    df_stab = pd.read_csv("stability_res/NGD_stability_partition.csv")
+    plot_ngd_partition(df_stab)
+    
+    ##########################################################
+    # OLD VERSION OF PLOTTING NGD PARTITION
+    # plot_ngd_partition(df_stab, q_init=0.001)
+
+    # allres_ngd = runall_ngd(q_init)
+    # save_pickle(file, allres_ngd)
+
+    # allres_ngd = load_pickle(file)
+
+    # plot_all_ngd(allres_ngd, q_init)
+    ##########################################################
 
 
 

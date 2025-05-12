@@ -380,6 +380,10 @@ def get_delta_lambda(gd_config, ngd_config, eq):
     return (gd_lambda-ngd_lambda, ngd_lambda)
 
 def find_candidate(s_ngd, h_ngd, q_ngd, state, gd_config, gd_curve, eq, s_mse_map):
+    '''
+    Given the current s_ngd, h_ngd, q_ngd, check if the candidate has the same 
+    eq and state as the gd config
+    '''
 
     gds, gdc, gdh = gd_config
  
@@ -402,7 +406,6 @@ def find_candidate(s_ngd, h_ngd, q_ngd, state, gd_config, gd_curve, eq, s_mse_ma
         s_mse_map[s_ngd] = {'MSE': diff, "dl": delta_lambda, 'eq': curr_eq, "lambda": nl}
         
         # print(diff)
-        # if best_diff == None or diff < best_diff:
         best_diff = diff
         best_ngd_config = (s_ngd, h_ngd)
         best_ngd_curve = ngd_curve
@@ -435,12 +438,7 @@ def grid_mapping(params, gdFile):
     gd_results = loadGres(params['h'], gdFile)
     gd_configs, gd_res = gd_results[0], gd_results[1]
 
-    ngd_results1 = load_pickle(f"new_allngdres001G_h5.pickle")
-    ngd_results2 = load_pickle(f"new_allngdres001G_h.pickle")
-    ngd_results = ngd_results1 | ngd_results2
-
     # print("STABILITY UNSTABLE REGIME:", stabilityRes[state])
-
 
     for (s, c, h) in gd_configs:
 
@@ -476,13 +474,13 @@ def grid_mapping(params, gdFile):
                     out1.write(f"q_init = {q_ngd:.4f}---------------------\n")
                     best_diff = 10000
                     s_mse_map = dict()
-                    s_range = np.arange(-10.0, 10.0, 0.01)
+                    s_range = np.arange(-10.0, 1.0, 0.01)
 
                     ### plot the lambda vs. s_ngd curve
                     # plot_lambda_curve(h_ngd, eq, (s, c, h))
                 
-                    for s_ngd in s_range:
-                        
+                    for s_ngd in s_range: # loop through s_ngd to find the best candidate
+                        ### check candidate and get MSE
                         curr_ngd_config, curr_ngd_curve, curr_MSE = find_candidate(s_ngd, h_ngd, q_ngd, state, (s, c, h), gd_curve, eq, s_mse_map)
                         # if math.isclose(s, 0.3) and math.isclose(c, 0.2):
                         #     print("SINGLE S RESULT", s_ngd, curr_ngd_config, curr_MSE)
@@ -498,19 +496,10 @@ def grid_mapping(params, gdFile):
                         # delta_lambda = get_delta_lambda((s, c, h), best_ngd_config[q_ngd], eq)
                         # for each s_ngd, store the MSE and delta lambda
                     out1.write(f"q_init={q_ngd:.4f}: s_ngd={s_ngd:.4f}, MSE={best_diff:.6f}\n")
-            # else: 
-            #     for ngd_key, ngd_curve in ngd_results.items():
-            #         diff = euclidean(ngd_curve, gd_curve)
-            #         # print(diff)
-            #         if diff < best_diff:
-            #             best_diff = diff
-            #             best_ngd_config = ngd_key
-            #             best_ngd_curve = ngd_curve
 
             if best_ngd_config == None: 
                 print("!!!!!!!!!!!!!NO STABLE SNGD")
                 continue
-
 
             seffMap[(s, c, h)] = best_ngd_config
             ngd_mapped.append(best_ngd_curve)
