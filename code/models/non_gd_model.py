@@ -20,10 +20,12 @@ def wm(s, h, target_steps, q_init):
         q_freqs[t+1] = (curr_q**2 * (1 - s) + curr_q * (1 - curr_q) * (1 - h * s)) / w_bar
         p_freqs[t+1] = (curr_p**2 + curr_p * (1 - curr_p) * (1 - h * s)) / w_bar
 
-        # print("step=%2d, w=%.4f, q=%.4f, p=%.4f"%(t, w[t], q_freqs[t+1], p_freqs[t+1]))
+        # print("step=%2d, currq=%.8f, q=%.20f, p=%.8f"%(t, q_freqs[t], q_freqs[t+1], p_freqs[t+1]))
 
         if (q_freqs[t+1] < 0 or q_freqs[t+1] > 1 or math.isclose(q_freqs[t+1], 1) or math.isclose(q_freqs[t+1], 0) 
-            or math.isclose(curr_q, q_freqs[t+1], rel_tol=1e-5)):
+            or math.isclose(curr_q, q_freqs[t+1], rel_tol=1e-20)):
+            if t == 0:
+                print("STOP AT step=%2d, w=%.4f, q=%.20f, p=%.8f, s=%.4f, h=%.4f"%(t, w[t], q_freqs[t+1], p_freqs[t+1], s, h))
             final = t+1
             break
 

@@ -61,12 +61,12 @@ def plot_errorh(h):
         
 
 ### plot simple dynamics for gd and non gd ################
-def plot_ngd(h):
+def plot_ngd(s, h):
     # with open('pickle/allngdres.pickle', 'rb') as f1:
     #     ngd_res = pickle.load(f1)
     # params = {'s': 0.4, 'c': 0.4, 'h': 0.5, 'target_steps': 100, 'q0': 0.1}
     # res = run_model(params)
-    res = wm(0.0, h, 40000, 0.01)
+    res = wm(s, h, 40000, 0.2)
     mut = res['q']
     print(h, mut, res['state'])
     # plt.plot(wt, color = 'orange', label = 'wild-type')
@@ -78,10 +78,11 @@ def plot_ngd(h):
     # plt.legend(title='Allele', bbox_to_anchor=(0.8, 0.5), loc='center left')
     # plt.show()
 
-def plot_ngds():
-    h_range = np.arange(0, 1, 0.1)
+def plot_ngds(s:float):
+    # h_range = np.arange(0, 1, 0.1)
+    h_range = [-0.333]
     for h in h_range:
-        plot_ngd(h)
+        plot_ngd(s, h)
     plt.ylabel('Allele Frequency')
     plt.xlabel('Time')
     plt.title('Allele frequency dynamics in non-gene drive population')
@@ -89,12 +90,14 @@ def plot_ngds():
     plt.legend(title='Allele', bbox_to_anchor=(0.8, 0.5), loc='center left')
     plt.show()
 
-# plot_ngds()
+# plot_ngds(-2.00)
 
 def plot_gd(ts, tc):
+    q_init = 0.2
+    h = 0.8
     colormaps = ['Greys', 'Reds', 'YlOrBr', 'Oranges', 'PuRd', 'BuPu',
                       'GnBu', 'YlGnBu', 'PuBuGn', 'Greens']
-    gd_result = load_pickle("gd_simulation_results/h0.0_allgdres001G.pickle")
+    gd_result = load_pickle(f"gd_simulation_results/h{h}_allgdres001G.pickle")
     configs, res = gd_result[0], gd_result[1]
     # ngd_results1 = load_pickle(f"new_allngdres001G_h5.pickle")
     # ngd_results2 = load_pickle(f"new_allngdres001G_h.pickle")
@@ -109,25 +112,27 @@ def plot_gd(ts, tc):
     
         # if len(res[(s, c, h)]['q']) < 1500 and not math.isclose(res[(s, c, h)]['q'][-1], 1.0) and res[(s, c, h)]['q'][-1] < 0.1:
         if math.isclose(s, ts) and math.isclose(c, tc):
+            gd_curve = run_model({'s': s, 'c': c, 'h': h, 'target_steps': 40000, 'q0': q_init})['q']
             cmap1 = plt.get_cmap(colormaps[int(s*10-1)])
             gd_color = cmap1(c)
             gd_color = 'b'
-            time = np.arange(len(res[(s, c, h)]['q']))
+            # time = np.arange(len(res[(s, c, h)]['q']))
+            time = np.arange(len(gd_curve))
 
             # print((s, c, h))
             # print(res[(s, c, h)]['q'])
-            s_range = np.arange(-10, 0, 1)
-            h_range = np.arange(0, 20, 1)
-            for ngds in s_range:
-                for ngdh in h_range:
-                    ngd_curve = wm(ngds, ngdh, 40000, 0.001)['q']
-                    s_norm = (ngds + 10) /len(s_range)  # Normalize s: -5 -> 0, -1 -> 1
-                    h_norm = (ngdh) /len(h_range)        # Normalize h: 0 -> 0, 9 -> 1
-                    color = (s_norm, h_norm, 0.5)  # fixed blue component (or vary as desired)
-                    plt.plot(np.arange(1, len(ngd_curve)+1), ngd_curve, color = color, label = f"NGD s = {ngds}, h = {ngdh}")
+            # s_range = np.arange(-10, 0, 1)
+            # h_range = np.arange(0, 20, 1)
+            # for ngds in s_range:
+            #     for ngdh in h_range:
+            #         ngd_curve = wm(ngds, ngdh, 40000, q_init)['q']
+            #         s_norm = (ngds + 10) /len(s_range)  # Normalize s: -5 -> 0, -1 -> 1
+            #         h_norm = (ngdh) /len(h_range)        # Normalize h: 0 -> 0, 9 -> 1
+            #         color = (s_norm, h_norm, 0.5)  # fixed blue component (or vary as desired)
+            #         plt.plot(np.arange(1, len(ngd_curve)+1), ngd_curve, color = color, label = f"NGD s = {ngds}, h = {ngdh}")
         # gd_color = cmap(1.*i/len(configs))
 
-            plt.plot(time, res[(s, c, h)]['q'], color = gd_color, label = f"s = {s}, c = {c}, h = {h}")
+            plt.plot(time, gd_curve, color = gd_color, label = f"s = {s}, c = {c}, h = {h}")
     plt.ylabel('Gene Drive Allele Frequency')
     plt.xlabel('Time')
     plt.title("Change in Mutant Allele Frequency")
@@ -136,7 +141,7 @@ def plot_gd(ts, tc):
     plt.legend(title='population condition', bbox_to_anchor=(1, 1.05), loc='upper left')
     plt.show()
 
-# plot_gd(0.8, 0.2)
+plot_gd(0.4, 0.4)
 
 def delta_curve(curve):
     first_d = []
@@ -694,7 +699,7 @@ Plot the mapped GD and NGD curves with different q_init for unstable regime
 def plot_qmaps(currH):
     curves = dict()
     current_gd = None
-    filepath = f"q_mapped_s/h{currH}_s0.8_c0.8_grid_G_unstable.txt"
+    filepath = f"unstable_mapping/h{currH}_s0.4_c0.4_grid_G_unstable.txt"
 
     with open(filepath, 'r') as file:
         for line in file:
@@ -713,7 +718,7 @@ def plot_qmaps(currH):
                 # Extract NGD parameters
                 q_init = float(parts[3].split('=')[1].strip(','))
                 ngd_s = float(parts[4].split('=')[1].strip(','))
-                ngd_h = float(parts[5].split('=')[1])
+                ngd_h = float(parts[5].split('=')[1].strip(','))
 
                 current_gd = (gd_s, gd_c, gd_h, q_init)
                 curves[current_gd]=(q_init, ngd_s, ngd_h)
@@ -730,7 +735,7 @@ def plot_qmaps(currH):
         gd_params = {'s': gd_s, 'h':gd_h, 'c': gd_c, 'q0': q_init, 'target_steps': 40000}
         q_init, ngd_s, ngd_h = data_points
         gd_curve = run_model(gd_params)['q']
-        ngd_curve = wm(gd_s, gd_h, 40000, q_init)['q']
+        ngd_curve = wm(ngd_s, ngd_h, 40000, q_init)['q']
         color1 = cmap1(norm(q_init))
         # color2 = cmap2(norm(q_init))
         plt.plot(np.arange(0, len(gd_curve)), gd_curve, marker = 'o', linestyle = '-', markersize=3, color = color1, label = f"GD q_init={q_init}, s = {gd_s}, c = {gd_c}, h = {gd_h}")

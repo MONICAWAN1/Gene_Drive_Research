@@ -98,10 +98,6 @@ def get_eq(params):
     eqs['q3'] = q3
     return eqs
 
-'''
-get NGD phase partition
-'''
-
 # get_eq({'config':(0.2, 0.8, 0), 'q0':0.001, 'conversion': "zygotic"})
 '''
 return allres: dict{"state": [(config1, eq), ...]}
