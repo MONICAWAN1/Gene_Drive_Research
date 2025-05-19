@@ -13,6 +13,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 # from .stability import get_ngd_stability, compute_lambda
 from models import run_model, wm, haploid_se, haploid
 from utils import export_legend, euclidean, load_pickle, save_pickle
+from .mapping import get_eq
 
 def loadGrad():
     return load_pickle(f"h0.0_hap_gradient_G_fix.pickle")
@@ -141,7 +142,7 @@ def plot_gd(ts, tc):
     plt.legend(title='population condition', bbox_to_anchor=(1, 1.05), loc='upper left')
     plt.show()
 
-plot_gd(0.4, 0.4)
+# plot_gd(0.4, 0.4)
 
 def delta_curve(curve):
     first_d = []
@@ -698,8 +699,11 @@ Plot the mapped GD and NGD curves with different q_init for unstable regime
 
 def plot_qmaps(currH):
     curves = dict()
+    ts = 0.4
+    tc = 0.3
     current_gd = None
-    filepath = f"unstable_mapping/h{currH}_s0.4_c0.4_grid_G_unstable.txt"
+    mapped = dict()
+    filepath = f"unstable_mapping/h{currH}_s{ts}_c{tc}_grid_G_unstable.txt"
 
     with open(filepath, 'r') as file:
         for line in file:
@@ -722,20 +726,53 @@ def plot_qmaps(currH):
 
                 current_gd = (gd_s, gd_c, gd_h, q_init)
                 curves[current_gd]=(q_init, ngd_s, ngd_h)
+                mapped[q_init] = (ngd_s, ngd_h)
 
-    # Plotting
+    # Plotting ##########################
+    # Plotting mapped s_ngd vs q_init
+    plt.figure(figsize=(10, 6))
+    q_values = list(mapped.keys())
+    s_ngd_values = [item[0] for item in mapped.values()]
+    plt.plot(q_values, s_ngd_values, marker='o', linestyle='-', markersize=3, color='blue', label=f's_ngd vs q_init at gd_s={gd_s}, gd_c={gd_c}, gd_h={gd_h})')
+    plt.xlabel('q_init')
+    plt.ylabel('s_ngd')
+    plt.title(f'Mapped s_ngd vs q_init for h = {currH}')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f"unstable_plots/h{currH}_s{ts}_c{tc}_mapped_s_ngd.jpg", dpi=600)
+    plt.show()
+
+
+    # Plotting mapped curves
     plt.figure(figsize=(10, 6))
     q_values = [item[3] for item in curves.keys()]
     norm = Normalize(vmin=min(q_values), vmax=max(q_values))
     cmap1 = cm.get_cmap('viridis')
     cmap2 = cm.get_cmap('BuPu')
+
+    # plot q_init = eq curve
+    gd_param = {'s': current_gd[0], 'c': current_gd[1], 'h': current_gd[2], 'conversion': "gametic", 'q0': current_gd[3], 'target_steps': 40000}
+    ngd_s = curves[current_gd][1]
+    ngd_h = curves[current_gd][2]
+
+    eq_q = get_eq(gd_param)['q3']
+    gd_param['q0'] = eq_q
+    eq_gdcurve = run_model(gd_param)['q']
+    print("eq_gdcurve", eq_gdcurve)
+    eq_gdcurve = np.concatenate([eq_gdcurve, np.full(200 - len(eq_gdcurve), eq_gdcurve[-1])])
+    eq_ngdcurve = wm(ngd_s, ngd_h, 40000, eq_q)['q']
+    plt.plot(np.arange(0, len(eq_gdcurve)), eq_gdcurve, marker = 'o', linestyle = '-', markersize=3, color = 'red', label = f"GD q_eq={eq_q:.4f}, s = {current_gd[0]}, c = {current_gd[1]}, h = {current_gd[2]}")
+    # plt.plot(np.arange(0, len(eq_ngdcurve)), eq_ngdcurve, linestyle = '--', markersize=3, color = 'red', label = f"NGD q_init={eq_q}, s = {ngd_s}, h = {ngd_h}")
+
+    # plot all curves for each q_init
     for i, (gd_params, data_points) in enumerate(curves.items()):
         print(gd_params, data_points)
         gd_s, gd_c, gd_h, q_init = gd_params
         gd_params = {'s': gd_s, 'h':gd_h, 'c': gd_c, 'q0': q_init, 'target_steps': 40000}
         q_init, ngd_s, ngd_h = data_points
-        gd_curve = run_model(gd_params)['q']
-        ngd_curve = wm(ngd_s, ngd_h, 40000, q_init)['q']
+        gd_curve = run_model(gd_params)['q'][:201]
+        ngd_curve = wm(ngd_s, ngd_h, 40000, q_init)['q'][:201]
         color1 = cmap1(norm(q_init))
         # color2 = cmap2(norm(q_init))
         plt.plot(np.arange(0, len(gd_curve)), gd_curve, marker = 'o', linestyle = '-', markersize=3, color = color1, label = f"GD q_init={q_init}, s = {gd_s}, c = {gd_c}, h = {gd_h}")
@@ -752,6 +789,7 @@ def plot_qmaps(currH):
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
+    plt.savefig(f"unstable_plots/h{currH}_s{ts}_c{tc}_unstable.jpg", dpi=600)
     plt.show()
 
 '''

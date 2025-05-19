@@ -111,11 +111,16 @@ def runall(params):
     g_res = load_pickle(gdres_file)
     configs, res = g_res[0], g_res[1]
     print('allconfigs', configs[:2])
+    h = params['config'][2]
 
     for s in np.arange(0.01, 1.01, 0.01):
         for c in np.arange(0.01, 1.01, 0.01):
-            h = params['config'][2]
+    
             params['config'] = (round(float(s), 3),round(float(c), 3),round(float(h), 3))
+            config = params['config']
+
+            if config not in configs:
+                continue
 
             alleq=get_eq(params) ### get all eq points for the current config
             eq1, eq2, eq3 = alleq['q1'], alleq['q2'], alleq['q3']
@@ -149,7 +154,21 @@ def runall(params):
                     allres['Loss'].append((params['config'], 0.0))
                 elif res[params['config']]['state'] == 'fix':
                     allres['Fixation'].append((params['config'], 1.0))
+    # -----------------------------------------------------------------
+    # write the dictionary to a text file
+    # -----------------------------------------------------------------
+    os.makedirs("phase_partition", exist_ok=True)
+    h_val = h
+    fname = f"phase_partition/partition_h{h_val}.txt"
+    with open(fname, "w") as fout:
+        for regime in ['Stable', 'Unstable', 'dq=1', 'Fixation', 'Loss']:
+            fout.write(f"## {regime}\n")
+            for (cfg, eq) in allres[regime]:
+                s_val, c_val, h_val = cfg
+                fout.write(f"s={s_val:.3f}, c={c_val:.3f}, h={h_val:.3f}, eq={eq:.4f}\n")
+            fout.write("\n")
 
+    print(f"Partition written to {fname}")
         
     return allres
             
@@ -194,6 +213,7 @@ def plot_regions(allres, state, conversion):
     unstable_configurations = allres[state]
     s_values = [config[0][0] for config in unstable_configurations]  # First element in the tuple (s)
     c_values = [config[0][1] for config in unstable_configurations]  # Second element in the tuple (c)
+    print("unstable", unstable_configurations)
     h_val = unstable_configurations[0][0][2]
     eq_values = [max(0, min(1, config[1])) for config in unstable_configurations]
 
@@ -219,6 +239,7 @@ def plot_regions(allres, state, conversion):
 
     # Show plot
     plt.grid(True)
+    plt.savefig(f"plot_partition/h{h_val}_{state}_{conversion}.jpg", dpi=600)
     plt.show()
 
 #######################################################################################
@@ -416,7 +437,7 @@ def plot_ngd_partition(df, q_init=None, save_path=None):
     fig.savefig(save_path, dpi=600)
     plt.close(fig)
 
-
+### OLD VERSION OF NGD STABILITY ##########################################
 # def runall_ngd(q_init):
 #     allres = {'Stable': [], 'Unstable': [], 'dq=1': [], 'Fixation': [], 'Loss': []}
 #     dfunc = compute_lambda()
@@ -498,28 +519,28 @@ def plot_ngd_partition(df, q_init=None, save_path=None):
 def main():
     s=0.6
     c=0.6
-    h=0.8
+    h=0.6
     q_init=0.001
-    regime = 'Fixation'
+    regime = 'Unstable'
     params = {'config':(s, c, h), 'q0':q_init, 'conversion': "gametic"}
     filename = f"h{h}_{params['conversion']}_stability_res.pickle"
 
     ##########################################################
     # OLD VERSION OF PLOTTING GD PARTITION
     # run through all configurations
-    # allres = runall(params)
-    # save_pickle(filename, allres) ### change file name
+    allres = runall(params)
+    save_pickle(filename, allres) ### change file name
     
-    # allres = load_pickle(filename)
+    allres = load_pickle(filename)
 
     # print(allres)
-    # f_out = open(f"stability_res/h{h}_g_{regime}.txt", 'w') #### change file name!!!!
-    # f_out.write(f"gene drive model configuration\t\tequilibrium\n")
-    # for state in allres.keys():
-    #     if state == regime:  ### change state check
-    #         for config, eq_val in allres[state]:
-    #             f_out.write(f"(s, c, h) = {config}\t\teq = {eq_val}\n")
-    # plot_regions(allres, regime, params['conversion'])
+    f_out = open(f"stability_res/h{h}_g_{regime}.txt", 'w') #### change file name!!!!
+    f_out.write(f"gene drive model configuration\t\tequilibrium\n")
+    for state in allres.keys():
+        if state == regime:  ### change state check
+            for config, eq_val in allres[state]:
+                f_out.write(f"(s, c, h) = {config}\t\teq = {eq_val}\n")
+    plot_regions(allres, regime, params['conversion'])
     #
     # plot_all(allres, params)
     # dfunc = compute_lambda()
@@ -548,7 +569,7 @@ def main():
 
     # df_stability.to_csv("stability_res/NGD_stability_partition.csv", index=False)
     df_stab = pd.read_csv("stability_res/NGD_stability_partition.csv")
-    plot_ngd_partition(df_stab)
+    # plot_ngd_partition(df_stab)
     
     ##########################################################
     # OLD VERSION OF PLOTTING NGD PARTITION

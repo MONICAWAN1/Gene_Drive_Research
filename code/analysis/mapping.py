@@ -7,7 +7,7 @@ import matplotlib.colors as mcolors
 import sympy as sp
 
 from .stability import derivative, compute_lambda_gd
-from .plotting import plot_lambda_curve
+# from .plotting import plot_lambda_curve
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -15,7 +15,7 @@ from utils import load_pickle, save_pickle, euclidean
 from models import haploid, run_model, wm
 
 def get_eq(params):
-    s, c, h = params['config']
+    s, c, h = params['s'], params['c'], params['h']
     sn = 0.5*(1-c)*(1-h*s)
     if params['conversion'] == 'zygotic':
         sc = c*(1-s)
@@ -419,12 +419,12 @@ def find_candidate(
 def grid_mapping(params, gdFile):
     seffMap = dict()
     ngd_mapped = []
-    ts = 0.4
-    tc = 0.4
+    ts = 0.5
+    tc = 0.5
     state = "Unstable"
     ### !!! CHANGE THE FILE NAME IF RUNNING FOR ALL !!!!!!
     # f_out = open(f"h{params['h']}_grid_G{gdFile}_stable.txt", 'w')
-    f_out = open(f"unstable_mapping/h{params['h']}_s{ts}_c{tc}_grid_G{gdFile}_unstable.txt", 'w')
+    f_out = open(f"unstable_mapping/h{params['h']}_s{ts}_c{tc}_grid_G_unstable.txt", 'w')
     f_out.write(f"Gene Drive Configuration\t\t(s, h) in NGD population (S_Effective)\n")
 
     ### LOADING NECESSARY RESULTS FOR MAPPING 
@@ -437,7 +437,7 @@ def grid_mapping(params, gdFile):
     for (s, c, h) in gd_configs:
 
         # compute eq for stable regime:
-        params_eq = {'config': (s, c, h), 'conversion': 'gametic'}
+        params_eq = {'s': s, 'c': c, 'h': h, 'conversion': 'gametic'}
         eq = get_eq(params_eq)['q3']
 
         # if ((s, c, h), eq) in stabilityRes[state]:
@@ -467,6 +467,9 @@ def grid_mapping(params, gdFile):
                 else:
                     q_init_list = [0.001]
                 for q_ngd in q_init_list:
+                    if q_ngd == eq:
+                        print("q_ngd == eq", q_ngd)
+                        continue
                     new_params = params.copy()
                     new_params['s'] = round(s, 3)
                     new_params['c'] = round(c, 3)
@@ -475,8 +478,8 @@ def grid_mapping(params, gdFile):
                     # print(new_params)
                     gd_curve = run_model(new_params)['q']
                     ### DEBUGGING
-                    if q_ngd == 0.2:
-                        print("Q=0,2", gd_curve)
+                    # if q_ngd == 0.2:
+                    #     print("Q=0,2", gd_curve)
                     out1.write(f"q_init = {q_ngd:.4f}---------------------\n")
                     best = {'mse': np.inf, 's_ngd': None, 'traj': None}
                     best_ngd_config = None
@@ -618,6 +621,11 @@ def gradient_mapping(params, gdFile):
     return {'map': seffMap, 'ngC': wms}
 
 def check_mapping(params, gdFile):
+    '''
+    Check if the mapping from GD to NGD is correct by checking if the equilibrium
+    frequency of the NGD population is the same as the equilibrium frequency of the
+    GD population.
+    '''
     sanity_failures = []
     h_val = params['h']
     stabilityRes = loadStability(h_val)
@@ -631,7 +639,7 @@ def check_mapping(params, gdFile):
             continue
 
         # Extract equilibrium
-        params_eq = {'config': (s, c, h), 'conversion': 'gametic'}
+        params_eq = {'s': s, 'c': c, 'h': h, 'conversion': 'gametic'}
         eq = get_eq(params_eq)['q3']
 
         if eq == 'NA' or not (0 < eq < 1):
