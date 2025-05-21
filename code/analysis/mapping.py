@@ -666,7 +666,6 @@ def check_mapping(params, gdFile):
 
     return sanity_failures
 
-
 # params = params = {'n': 500, 'h': 0.3, 'target_steps': 40000, 'q0': 0.001}
 # check_mapping(params)
 

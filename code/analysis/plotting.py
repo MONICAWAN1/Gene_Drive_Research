@@ -1081,7 +1081,71 @@ def plot_fixation_surface(currH):
     plt.savefig(f"plots_fixation/3d_surface_hngd_h{currH}.jpg", dpi=600)
     plt.close()
 
+from .solve import solve_sngd
 
+def plot_sngd(currH):
+    """
+    Plot the mapped s_NGD as a colormap on the (h_NGD, q) plane
+    for a fixed GD configuration (s_gd, c_gd, h_gd).
+    """
+    # 1) fixed gene-drive params
+    gd_s, gd_c, gd_h = 0.5, 0.42, 0.3
+
+    # 2) prepare grid in q and h_NGD
+    q_vals = np.arange(0.001, 1.0, 0.001)
+    h_vals = np.arange(-1.0, 1.0, 0.01)
+
+    # 3) collect mapping results
+    H, Q, S = [], [], []
+    for q in q_vals:
+        for h_ngd in h_vals:
+            try:
+                s_ngd = solve_sngd(gd_s, gd_c, gd_h, h_ngd, q)
+            except Exception:
+                continue
+            if s_ngd is None or np.isnan(s_ngd):
+                continue
+            H.append(h_ngd)
+            Q.append(q)
+            S.append(s_ngd)
+
+    # convert to arrays
+    H = np.array(H)
+    Q = np.array(Q)
+    S = np.array(S)
+    print("S", S)
+
+    # 4) scatter plot with colormap
+    plt.figure(figsize=(8,6))
+    norm = mcolors.Normalize(vmin=-2, vmax=2)
+    print(norm.vmin, norm.vmax)
+    sc = plt.scatter(
+        Q, H,
+        c=S,
+        cmap='magma',
+        norm=norm,
+        s=10,
+        marker='o',
+        edgecolors='none',
+        alpha=0.8
+    )
+    cbar = plt.colorbar(sc)
+    cbar.set_label(r'$s_{NGD}$', fontsize=12)
+
+    # 5) labels and title
+    plt.xlabel(r'$q_{init}$', fontsize=12)
+    plt.ylabel(r'$h_{NGD}$', fontsize=12)
+    plt.title(
+        f"Mapped $s_{{NGD}}$ on ($h_{{NGD}}$, $q$)-plane for GD (s={gd_s}, c={gd_c}, h={gd_h})",
+        fontsize=14
+    )
+    plt.grid(True, linestyle='--', alpha=0.5)
+
+    # 6) save and show
+    plt.tight_layout()
+    outname = f"sngd_heatmap/sngd_vs_hq_s{gd_s}_c{gd_c}_h{gd_h}.png"
+    plt.savefig(outname, dpi=600)
+    plt.show()
 
     # plot_msedl((0.7, 0.4, 0.3))
     # plot_eq_lambda((0.2, 0.1, 0.3))
