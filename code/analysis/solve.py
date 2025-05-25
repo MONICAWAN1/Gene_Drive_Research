@@ -1,25 +1,44 @@
 # %%
-import sympy
+import sympy as sp
+from sympy import pprint
 
-q = sympy.Symbol('q')
-s = sympy.Symbol('s')
-c = sympy.Symbol('c')
-h = sympy.Symbol('h')
+q = sp.Symbol('q')
+s = sp.Symbol('s')
+c = sp.Symbol('c')
+h = sp.Symbol('h')
 
-s2 = sympy.Symbol('s2')
-h2 = sympy.Symbol('h2')
+s2 = sp.Symbol('s2')
+h2 = sp.Symbol('h2')
 
 # %%
 expr_gd = (q**2 * (1-s) + q * (1-q) * (1+c) * (1 - h*s)) / (q**2 * (1-s) + 2 * q * (1-q) * (1 - h*s) + (1-q)**2)
 expr_ngd = (q**2 * (1-s2) + q * (1-q) * (1 - h2*s2)) / (q**2 * (1-s2) + 2 * q * (1-q) * (1 - h2*s2) + (1-q)**2)
 
 # %%
-sympy.simplify(expr_gd - expr_ngd)
-s2_sol = sympy.solvers.solve(expr_gd - expr_ngd, s2)[0]
+sp.simplify(expr_gd - expr_ngd)
 
-s2_func = sympy.lambdify((s, c, h, h2, q), s2_sol, modules='numpy')
+q1 = sp.Rational(200, 1000)
+q2 = sp.Rational(800, 1000)
 
-def solve_sngd(s, c, h, h2, q):
+eq1 = expr_gd.subs(q, q1) - expr_ngd.subs(q, q1)
+eq2 = expr_gd.subs(q, q2) - expr_ngd.subs(q, q2)
+
+sol = sp.solve([eq1, eq2], [s2, h2], dict=True)
+
+s2_sol = sp.simplify(sol[0][s2])
+h2_sol = sp.simplify(sol[0][h2])
+
+print("Symbolic expression for s2:")
+pprint(s2_sol)
+
+print("\nSymbolic expression for h2:")
+pprint(h2_sol)
+
+s2_func = sp.lambdify((s, c, h), s2_sol, modules='numpy')
+h2_func = sp.lambdify((s, c, h), h2_sol, modules='numpy')
+# %%
+
+def solve_sngd(s, c, h):
     """
     Solve the equation for s2 given s, c, h, and h2.
     
@@ -32,4 +51,6 @@ def solve_sngd(s, c, h, h2, q):
     Returns:
     float: The solution for s2.
     """
-    return s2_func(s, c, h, h2, q)
+    return s2_func(s, c, h), h2_func(s, c, h)
+
+print(solve_sngd(0.5, 0.5, 0.3))

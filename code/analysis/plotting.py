@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import Normalize
 from matplotlib import cm
+import seaborn as sns
 import math
 import pickle
 import os, sys
@@ -1089,16 +1090,24 @@ def plot_sngd(currH):
     for a fixed GD configuration (s_gd, c_gd, h_gd).
     """
     # 1) fixed gene-drive params
-    gd_s, gd_c, gd_h = 0.5, 0.42, 0.3
+    gd_s, gd_c, gd_h = 0.5, 0.8, 0.8
+    gridResult = load_pickle(f"h{currH}_grid_fix001_G.pickle")
+
+    grid_map, grid_mapcurves = gridResult['map'], gridResult['ngC']
+    mapped_params = grid_map[(gd_s, gd_c, gd_h)]
+    mapped_s, mapped_h = mapped_params[0], mapped_params[1]
 
     # 2) prepare grid in q and h_NGD
     q_vals = np.arange(0.001, 1.0, 0.001)
     h_vals = np.arange(-1.0, 1.0, 0.01)
 
+    h_s_map = dict()
+
     # 3) collect mapping results
     H, Q, S = [], [], []
-    for q in q_vals:
-        for h_ngd in h_vals:
+    for h_ngd in h_vals:
+        curr_s = []
+        for q in q_vals:
             try:
                 s_ngd = solve_sngd(gd_s, gd_c, gd_h, h_ngd, q)
             except Exception:
@@ -1107,7 +1116,10 @@ def plot_sngd(currH):
                 continue
             H.append(h_ngd)
             Q.append(q)
-            S.append(s_ngd)
+            S.append(round(float(s_ngd), 5))
+            curr_s.append(round(float(s_ngd), 3)) 
+        h_s_map[round(h_ngd, 3)] = curr_s
+
 
     # convert to arrays
     H = np.array(H)
@@ -1115,9 +1127,20 @@ def plot_sngd(currH):
     S = np.array(S)
     print("S", S)
 
-    # 4) scatter plot with colormap
+    # 4) write the s_ngd sequence for the mapped h_ngd to a file
+    os.makedirs("sngd_heatmap", exist_ok=True)
+    txt_path = f"sngd_heatmap/sngd_s{gd_s}_c{gd_c}_h{gd_h}.txt"
+    with open(txt_path, 'w') as fout:
+        fout.write(
+            f"gd_configuration=({gd_s}, {gd_c}, {gd_h}), "
+            f"mapped h_ngd={h_ngd:.6f}, "
+            f"sngd list={h_s_map[mapped_h]}\n"
+        )
+    print(f"Line data written to {txt_path}")
+
+    # 5) scatter plot with colormap
     plt.figure(figsize=(8,6))
-    norm = mcolors.Normalize(vmin=-2, vmax=2)
+    norm = mcolors.Normalize(vmin=-5, vmax=5)
     print(norm.vmin, norm.vmax)
     sc = plt.scatter(
         Q, H,
@@ -1131,6 +1154,10 @@ def plot_sngd(currH):
     )
     cbar = plt.colorbar(sc)
     cbar.set_label(r'$s_{NGD}$', fontsize=12)
+
+    plt.axhline(y=mapped_h, color="black", linestyle="--", linewidth=2,
+                label=fr"mapped $h_{{NGD}}={mapped_h:.3f}$")
+    plt.legend(loc="upper right")
 
     # 5) labels and title
     plt.xlabel(r'$q_{init}$', fontsize=12)
@@ -1149,3 +1176,136 @@ def plot_sngd(currH):
 
     # plot_msedl((0.7, 0.4, 0.3))
     # plot_eq_lambda((0.2, 0.1, 0.3))
+
+def build_df(configs, grid_map, q_vals):
+    """
+    configs : list of (s_GD, c_GD, h_GD) tuples
+    grid_map : dict mapping (s_GD, c_GD, h_GD) to (s_NGD, h_NGD)
+    q_vals  : 1-D numpy array of q grid
+    returns : long-form DataFrame
+              columns = ['s_gd','c_gd','h_gd','q','h_ngd','s_ngd']
+    """
+    rows = []
+    for s_gd, c_gd, h_gd in configs:
+        # mapped h_NGD for *this* config (from your pickle)
+        h_ngd = grid_map[(s_gd, c_gd, h_gd)][1]
+        for q in q_vals:
+            s_ngd = solve_sngd(s_gd, c_gd, h_gd, h_ngd, q)
+            rows.append([s_gd, c_gd, h_gd, q, h_ngd, s_ngd])
+    return pd.DataFrame(rows,
+                        columns=['s_gd','c_gd','h_gd','q','h_ngd','s_ngd'])
+
+
+def plot_sngd_all(currH):
+    """
+    plot the change in sngd with q_init for different configurations
+    """
+    gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
+    gridResult = load_pickle(f"h{currH}_grid_fix001_G.pickle")
+
+    gd_configs, _ = gd_results[0], gd_results[1]
+    currH = float(currH)
+    configs_to_plot = [(0.1, 0.1, currH), (0.1, 0.2, currH), (0.2, 0.5, currH), (0.2, 0.8, currH)]
+
+    grid_map, _ = gridResult['map'], gridResult['ngC']
+
+    # Build the dataframe of s_ngd vs q_init for each config
+    q_vals = np.arange(0.001, 1.0, 0.001)
+    df = build_df(configs_to_plot, grid_map, q_vals)
+
+    plt.figure(figsize=(8,6))
+    palette = sns.color_palette("tab10", n_colors=len(configs_to_plot))
+
+    for (cfg, colour) in zip(configs_to_plot, palette):
+        s_gd, c_gd, h_gd = cfg
+        subset = df[(df['s_gd']==s_gd) & (df['c_gd']==c_gd) & (df['h_gd']==h_gd)]
+        plt.plot(subset['q'], subset['s_ngd'],
+                label=f"s={s_gd}, c={c_gd}, h={h_gd}",
+                color=colour, lw=1.6)
+
+    plt.xlabel(r"$q_{init}$", fontsize=12)
+    plt.ylabel(r"$s_{NGD}$ (mapped)", fontsize=12)
+    plt.title("Mapped $s_{NGD}$ vs q curves for each drive configuration at the mapped $h_{NGD}$",
+            fontsize=14)
+    plt.grid(True, linestyle="--", alpha=0.5)
+    plt.legend(fontsize=9, title="GD config", ncol=2)
+    plt.tight_layout()
+    plt.savefig("sngd_curves_all_configs.png", dpi=600)
+    plt.show()
+
+def plot_diff(currH):
+    '''
+    Plot the difference between mapped and solved s_ngd curves for different configurations
+    '''
+    gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
+    # gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
+    gridResult= load_pickle(f"h{currH}_grid_fix001_G.pickle") # all hap grid results
+
+    gd_configs, gd_res = gd_results[0], gd_results[1]
+
+    sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
+    # sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
+
+    stabilityRes = load_pickle(f"h{currH}_gametic_stability_res.pickle")
+    # collect data
+    all_s, all_c, all_diff = [], [], []
+
+    for (s_gd, c_gd, h_gd) in gd_configs:
+        if not math.isclose(h_gd, float(currH)):
+            continue
+        # only fixation regime
+        if ((s_gd, c_gd, h_gd), 1.0) not in stabilityRes['Fixation']:
+            continue
+        # must exist in grid mapping
+        if (s_gd, c_gd, h_gd) not in sMap_grid:
+            continue
+
+        # (a) mapped NGD from simulation
+        mapped_s, mapped_h = sMap_grid[(s_gd, c_gd, h_gd)]
+        mapped_curve = wm(mapped_s, mapped_h, 40000, 0.001)['q']
+
+        # (b) solved NGD from analytic formula
+        solved_s, solved_h = solve_sngd(s_gd, c_gd, h_gd)
+        solved_curve = wm(solved_s, solved_h, 40000, 0.001)['q']
+
+        # trajectory difference
+        diff = euclidean(mapped_curve, solved_curve)
+
+        all_s.append(s_gd)
+        all_c.append(c_gd)
+        all_diff.append(diff)
+
+    # convert to arrays
+    all_s = np.array(all_s)
+    all_c = np.array(all_c)
+    all_diff = np.array(all_diff)
+
+    # make plot directory
+    os.makedirs('plots_diff', exist_ok=True)
+
+    # scatter heatmap
+    plt.figure(figsize=(8,6))
+    norm = mcolors.Normalize(vmin=np.min(all_diff), vmax=np.max(all_diff))
+    sc = plt.scatter(
+        all_c, all_s,
+        c=all_diff,
+        cmap='BuPu',
+        norm=norm,
+        s=50,
+        edgecolors='k',
+        linewidths=0.3,
+        alpha=0.8
+    )
+    cbar = plt.colorbar(sc)
+    cbar.set_label('Euclidean diff of trajectories', fontsize=12)
+
+    plt.xlabel('c_GD', fontsize=12)
+    plt.ylabel('s_GD', fontsize=12)
+    plt.title(f'Trajectory error: mapped vs analytic NGD (h_GD={currH})', fontsize=14)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+
+    outpath = f'plots_diff/diff_heatmap_h{currH}.png'
+    plt.savefig(outpath, dpi=600)
+    plt.show()
+    print(f"Plot saved to {outpath}")      

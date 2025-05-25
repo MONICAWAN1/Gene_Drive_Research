@@ -2,7 +2,7 @@ import argparse, sys, os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from analysis import plot_mapping, plot_gd, plotMapDiff, ploterror, partition, plot_errorh, getHapseMapDiff, plot_qmaps, gd_to_ngd_diff, plot_fixation_surface, plot_fixation_res, test_mapping_trajectory, plot_sngd
+from analysis import plot_mapping, plot_gd, plotMapDiff, ploterror, partition, plot_errorh, getHapseMapDiff, plot_qmaps, gd_to_ngd_diff, plot_fixation_surface, plot_fixation_res, test_mapping_trajectory, plot_sngd, plot_sngd_all, plot_diff
 
 '''
 ploterror: (run getDiff.py first) Error Heatmap for the Grid/gradient Mapping from GD to NGD Haploid Model at some h
@@ -32,7 +32,9 @@ def main():
         "plot_fixation_res": plot_fixation_res,
         "plot_fixation_surface": plot_fixation_surface,
         "test_mapping_trajectory": test_mapping_trajectory,
-        "plot_sngd": plot_sngd
+        "plot_sngd": plot_sngd,
+        "plot_sngd_all": plot_sngd_all,
+        "plot_diff": plot_diff
     }
 
     if args.plot_function in plot_functions:
