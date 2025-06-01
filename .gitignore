@@ -25,3 +25,4 @@ code/pickle/allngdres.pickle
 *.zip
 *.tar
 .DS_Store
+.sh
