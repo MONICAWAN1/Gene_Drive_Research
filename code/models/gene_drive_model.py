@@ -30,7 +30,7 @@ def run_model(params):
         # wtfreqs[t+1] = (curr_p**2 + 2 * curr_p * (1 - curr_p) * s_n) / w_bar
         wtfreqs[t+1] = 1-freqs[t+1]
 
-        if math.isclose(freqs[t+1], 1) or math.isclose(freqs[t+1], 0) or math.isclose(curr_q, freqs[t+1], rel_tol=1e-40):
+        if math.isclose(freqs[t+1], 1) or math.isclose(freqs[t+1], 0) or math.isclose(curr_q, freqs[t+1], rel_tol=1e-10):
             final = t+1
             break
         # if not math.isclose(freqs[t+1] + wtfreqs[t+1], 1.0):

@@ -82,7 +82,7 @@ def plot_ngd(s, h):
 
 def plot_ngds(s:float):
     # h_range = np.arange(0, 1, 0.1)
-    h_range = [-0.333]
+    h_range = [2.375]
     for h in h_range:
         plot_ngd(s, h)
     plt.ylabel('Allele Frequency')
@@ -92,7 +92,7 @@ def plot_ngds(s:float):
     plt.legend(title='Allele', bbox_to_anchor=(0.8, 0.5), loc='center left')
     plt.show()
 
-# plot_ngds(-2.00)
+# plot_ngds(-2.02)
 
 def plot_gd(ts, tc):
     q_init = 0.2
@@ -245,6 +245,9 @@ def getHapseMapDiff(currH):
     save_pickle(savedPickle, saved)
 
 def plotMapDiff(currH):
+    '''
+    Given current h value, plot an Error heatmap for haploid_se vs GD
+    '''
     gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
     gd_configs, gd_res = gd_results[0], gd_results[1]
     stabilityRes = load_pickle(f"h{currH}_gametic_stability_res.pickle")
@@ -366,6 +369,12 @@ def partition():
     # Show plot
     plt.show()
 
+def get_solved_curve(s, c, h, currH):
+    solved_res = load_pickle(f"solved_results/solved_res_h{currH}.pickle")
+    solved_params, solved_curve = solved_res[(s, c, h)]
+    return solved_params, solved_curve
+
+
 '''
 mapping curves of ngd and gd populations for a single configuration
 Need to change the loaded files according to plotted curves
@@ -374,40 +383,53 @@ def plot_mapping(currH):
     # loading results
     gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
     # gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
-    gridResult_diploid = load_pickle(f"h{currH}_grid_fix001_G.pickle") # all hap grid results
-    gridResult = load_pickle(f"h{currH}_hap_grid_G_fix.pickle")
+    gridres_filename = f"h{currH}_grid_fix001_G.pickle"
+    gridResult_diploid = load_pickle(gridres_filename) # all hap grid results
+    # gridResult = load_pickle(f"h{currH}_hap_grid_G_fix.pickle")
 
     gd_configs, gd_res = gd_results[0], gd_results[1]
 
-    sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
+    # sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
     sMap_grid_diploid, wms_grid_diploid = gridResult_diploid['map'], gridResult_diploid['ngC']
+    # sMap_grid_diploid, wms_grid_diploid = gridResult_diploid['config'], gridResult_diploid['traj']
     # sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
 
-    plt.figure(figsize = (15, 7))
+    plt.figure(figsize = (8, 6))
+    ts = 0.6
+    tc = 0.56
 
     for (s, c, h) in gd_configs:
-        if (math.isclose(s, 0.75) and math.isclose(c, 0.6)):
+        if (math.isclose(s, ts) and math.isclose(c, tc)):
         # if s < c and math.isclose(s, 0.1):
             # plot grid (hap/diploid?)
-            if (s, c, h) in sMap_grid and type(sMap_grid[(s,c,h)]) != tuple:
-                best_s_grid = sMap_grid[(s, c, h)]
-                i = list(sMap_grid.keys()).index((s, c, h))
-                wm_curve_grid = wms_grid[i]
-                time0 = np.arange(0, len(wm_curve_grid))
-                w_color1 = 'y'
-                plt.plot(time0, wm_curve_grid, marker = 'o', color = w_color1, markersize=3, linestyle = '-', label = f'grid search haploid NGD (s = {best_s_grid})')
+            solved_params, solved_curve = get_solved_curve(s, c, h, currH)
+            solved_s, solved_h = solved_params 
+            plt.plot(solved_curve, color = '#d16817', marker = 's', markersize = '2', label = f'solved curve ngd_s={solved_s:.4f}, ngd_h={solved_h:.4f}')
+
+            # haploid trajectory
+            # if (s, c, h) in sMap_grid and type(sMap_grid[(s,c,h)]) != tuple:
+            #     best_s_grid = sMap_grid[(s, c, h)]
+            #     i = list(sMap_grid.keys()).index((s, c, h))
+            #     wm_curve_grid = wms_grid[i]
+            #     time0 = np.arange(0, len(wm_curve_grid))
+            #     w_color1 = 'y'
+            #     plt.plot(time0, wm_curve_grid, marker = 'o', color = w_color1, markersize=3, linestyle = '-', label = f'grid search haploid NGD (s = {best_s_grid})')
+            
+            # diploid trajectory
             if (s, c, h) in sMap_grid_diploid:
                 # print("TRUEE")
-                best_s_grid, best_h_grid = sMap_grid_diploid[(s, c, h)][0], sMap_grid_diploid[(s, c, h)][1]
+                if "unstable" not in gridres_filename:
+                    best_s_grid, best_h_grid = sMap_grid_diploid[(s, c, h)][0], sMap_grid_diploid[(s, c, h)][1]
+                else:
+                    best_s_grid, best_h_grid = sMap_grid_diploid[0], sMap_grid_diploid[1]
 
-                best_s_grid = -0.32
                 cmap = plt.get_cmap('GnBu')
                 # w_color = cmap(1.*i/len(h_range))
-                w_color0 = 'g'
+                w_color0 = '#0e169e'
                 # i = list(sMap_grid_diploid.keys()).index((s, c, h))
                 wm_curve_grid = wm(best_s_grid, best_h_grid, 40000, 0.001)['q']
                 time1 = np.arange(0, len(wm_curve_grid))
-                # plt.plot(time1, wm_curve_grid, marker = 'o', color = w_color0, markersize=3, linestyle = '-', label = f'grid search diploid NGD (s = {best_s_grid:.3f}, h = {best_h_grid:.3f})')
+                plt.plot(time1, wm_curve_grid, marker = 'o', color = w_color0, markersize=2, linestyle = '-', label = f'grid search diploid NGD (s = {best_s_grid:.3f}, h = {best_h_grid:.3f})')
 
             # PLOT GRADIENT (HAP/DIPLOID)
             # cmap2 = plt.get_cmap('GnBu') # grid mapping curves
@@ -433,7 +455,7 @@ def plot_mapping(currH):
 
             # PLOT GD CURVE
             cmap = plt.get_cmap("Reds")
-            gd_color = cmap(0.75) # original gene-drive curve
+            gd_color = "#ca1f8e" # original gene-drive curve
 
             # PLOT HAPSE
             paramSe = {'s':s, 'c':c, 'n': 500, 'h': h, 'target_steps': 40000, 'q0': 0.001}
@@ -472,19 +494,23 @@ def plot_mapping(currH):
     plt.ylabel('Gene Drive/Mutant Allele Frequency', fontsize=12)
     plt.xlabel('Time', fontsize=12)
     plt.title(f"Comparison of gene drive and different mapping results at h = {currH}")
-    plt.tight_layout(rect=[0, 0, 0.7, 1])
+    # plt.tight_layout(rect=[0, 0, 0.7, 1])
     plt.grid(True)
-    legend = plt.legend(title='population condition', bbox_to_anchor=(1, 1.05), loc='upper left')
+    # legend = plt.legend(title='population condition', loc='upper left', bbox_to_anchor=(0,1))
+    legend = plt.legend(title='population condition', loc='lower right', bbox_to_anchor=(1, 0))
     export_legend(legend)
     print("showing")
     plt.show()
+    plt.savefig(f"trajectory_plot/h{currH}_grid_solved_s{ts}_c{tc}.jpg", dpi=600)
 
 
 
 def ploterror(currH):
-    diffmapfile = f"h{currH}_mappingdiff_hap_grid.pickle"
+    '''
+    Read the mapping difference file and plot the error heatmap'''
+    diffmapfile = f"unstable_mapping_results/h{currH}_mappingdiff_grid_unstable.pickle"
     diffmap = load_pickle(diffmapfile)
-    stability = load_pickle(f"h{currH}_gametic_stability_res.pickle")
+    # stability = load_pickle(f"h{currH}_gametic_stability_res.pickle")
 
     ngd_s = sorted(set([conf[0] for conf in diffmap.keys()]))
     ngd_c = sorted(set([conf[1] for conf in diffmap.keys()]))
@@ -501,10 +527,11 @@ def ploterror(currH):
     for (s, c, h), error in diffmap.items():
         i = ngd_s.index(s)  # row (y-axis)
         j = ngd_c.index(c)  # column (x-axis)
-        errors[i, j] = error
+        errors[i, j] = error[2]
 
     cmin, cmax = np.nanmin(errors), np.nanmax(errors)
     print(cmin, cmax)
+    cmax = 0.4
 
     plt.figure(figsize=(9, 7))
     plt.imshow(
@@ -512,8 +539,8 @@ def ploterror(currH):
         aspect='auto',
         cmap='BuPu',
         origin='lower',
-        vmin=min_val,
-        vmax=max_val
+        vmin=cmin,
+        vmax=cmax
     )
 
     plt.colorbar(label='Mean Squared Error (Error of mapping)')
@@ -530,8 +557,9 @@ def ploterror(currH):
 
     plt.xlabel('c in gene drive', fontsize=15)
     plt.ylabel('s in gene drive', fontsize=15)
-    plt.title(f"Mapping Error from GD to NGD Haploid Model at h = {currH} with Diploid Grid Search")
+    plt.title(f"Mapping Error from GD to NGD at h = {currH} with Grid Search for Unstable Regime")
     plt.show()
+    plt.savefig(f"unstable_mapping_v2/h{currH}_maperror_unstable.jpg", dpi=600)
 
 
 def gd_to_ngd_diff(currH):
@@ -694,17 +722,11 @@ def plot_lambda_curve(h, q, gd_config):
 
 
 from collections import defaultdict
-''''
-Plot the mapped GD and NGD curves with different q_init for unstable regime
-'''
 
-def plot_qmaps(currH):
+def load_mapping_unstable_results(filepath):
     curves = dict()
-    ts = 0.4
-    tc = 0.3
-    current_gd = None
     mapped = dict()
-    filepath = f"unstable_mapping/h{currH}_s{ts}_c{tc}_grid_G_unstable.txt"
+    current_gd = None
 
     with open(filepath, 'r') as file:
         for line in file:
@@ -728,9 +750,16 @@ def plot_qmaps(currH):
                 current_gd = (gd_s, gd_c, gd_h, q_init)
                 curves[current_gd]=(q_init, ngd_s, ngd_h)
                 mapped[q_init] = (ngd_s, ngd_h)
+    return current_gd, curves, mapped
 
-    # Plotting ##########################
+def load_mapping_unstable_2(filepath, gd_config):
+    mapres = load_pickle(filepath)
+    mapped_config = mapres[gd_config][:2]
+    return mapped_config
+
+def plot_sngd_q(mapped, currH, current_gd):
     # Plotting mapped s_ngd vs q_init
+    gd_s, gd_c, gd_h = current_gd
     plt.figure(figsize=(10, 6))
     q_values = list(mapped.keys())
     s_ngd_values = [item[0] for item in mapped.values()]
@@ -741,56 +770,85 @@ def plot_qmaps(currH):
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(f"unstable_plots/h{currH}_s{ts}_c{tc}_mapped_s_ngd.jpg", dpi=600)
+    plt.savefig(f"unstable_plots/h{currH}_s{current_gd[0]}_c{current_gd[1]}_mapped_s_ngd.jpg", dpi=600)
     plt.show()
 
-
-    # Plotting mapped curves
+''''
+Plot the mapped GD and NGD curves with based on a set of q_init for unstable regime
+'''
+def plot_qmaps(currH):
+    curves = dict()
+    ts = 0.6
+    tc = 0.6
+    current_gd = (ts, tc, float(currH))
+    mapped = dict()
+    version = 2  # version of the mapping results
     plt.figure(figsize=(10, 6))
-    q_values = [item[3] for item in curves.keys()]
-    norm = Normalize(vmin=min(q_values), vmax=max(q_values))
     cmap1 = cm.get_cmap('viridis')
-    cmap2 = cm.get_cmap('BuPu')
+    gd_param = {'s': current_gd[0], 'c': current_gd[1], 'h': current_gd[2], 'conversion': "gametic", 'q0': 0.1, 'target_steps': 40000}
 
-    # plot q_init = eq curve
-    gd_param = {'s': current_gd[0], 'c': current_gd[1], 'h': current_gd[2], 'conversion': "gametic", 'q0': current_gd[3], 'target_steps': 40000}
-    ngd_s = curves[current_gd][1]
-    ngd_h = curves[current_gd][2]
+    # version 1 of unstable mapping results are stored in txt 
+    if version == 1:
+        filepath = f"unstable_mapping/h{currH}_s{ts}_c{tc}_grid_G_unstable.txt"
+        current_gd, curves, mapped = load_mapping_unstable_results(filepath)
+        q_values = [item[3] for item in curves.keys()]
+        norm = Normalize(vmin=min(q_values), vmax=max(q_values))
 
+
+        ngd_s = curves[current_gd][1]
+        ngd_h = curves[current_gd][2]
+
+        # Plotting ##########################
+        for i, (gd_params, data_points) in enumerate(curves.items()):
+            print(gd_params, data_points)
+            gd_s, gd_c, gd_h, q_init = gd_params
+            gd_param = {'s': gd_s, 'h':gd_h, 'c': gd_c, 'q0': q_init, 'target_steps': 40000}
+            q_init, ngd_s, ngd_h = data_points
+            gd_curve = run_model(gd_param)['q'][:201]
+            ngd_curve = wm(ngd_s, ngd_h, 40000, q_init)['q'][:201]
+    
+            color1 = cmap1(norm(q_init))
+            # color2 = cmap2(norm(q_init))
+            plt.plot(np.arange(0, len(gd_curve)), gd_curve, marker = 'o', linestyle = '-', markersize=3, color = color1, label = f"GD q_init={q_init}, s = {gd_s}, c = {gd_c}, h = {gd_h}")
+            plt.plot(np.arange(0, len(ngd_curve)), ngd_curve, linestyle = '--', markersize=3, color = color1, label = f"NGD q_init={q_init}, s = {ngd_s}, h = {ngd_h}")
+    elif version == 2:
+        filepath = f"unstable_mapping_results/h{currH}_mappingdiff_grid_unstable.pickle"
+        mapped_config = load_mapping_unstable_2(filepath, current_gd)
+        q_values = np.arange(0.01, 1.0, 0.1)
+        norm = Normalize(vmin=min(q_values), vmax=max(q_values))
+        ngd_s, ngd_h = mapped_config[0], mapped_config[1]
+
+        ### Plotting mapped curves
+        steps = 101
+        for q_init in q_values:
+            gd_param['q0'] = q_init
+            gd_curve = run_model(gd_param)['q'][:steps]
+            ngd_curve = wm(ngd_s, ngd_h, 40000, q_init)['q'][:steps]
+            color1 = cmap1(norm(q_init))
+            q_init = round(q_init, 4)
+            plt.plot(np.arange(0, len(gd_curve)), gd_curve, marker = 'o', linestyle = '-', markersize=3, color = color1, label = f"GD q_init={q_init}")
+            plt.plot(np.arange(0, len(ngd_curve)), ngd_curve, linestyle = '--', markersize=3, color = color1, label = f"NGD q_init={q_init}, s = {ngd_s}, h = {ngd_h}")
+    
+    else:
+        plot_sngd_q(mapped, currH, current_gd)
+
+    ##### plot q_init = eq curve #######################################
     eq_q = get_eq(gd_param)['q3']
     gd_param['q0'] = eq_q
     eq_gdcurve = run_model(gd_param)['q']
     print("eq_gdcurve", eq_gdcurve)
-    eq_gdcurve = np.concatenate([eq_gdcurve, np.full(200 - len(eq_gdcurve), eq_gdcurve[-1])])
+    eq_gdcurve = np.concatenate([eq_gdcurve, np.full(steps - len(eq_gdcurve), eq_gdcurve[-1])])
     eq_ngdcurve = wm(ngd_s, ngd_h, 40000, eq_q)['q']
     plt.plot(np.arange(0, len(eq_gdcurve)), eq_gdcurve, marker = 'o', linestyle = '-', markersize=3, color = 'red', label = f"GD q_eq={eq_q:.4f}, s = {current_gd[0]}, c = {current_gd[1]}, h = {current_gd[2]}")
     # plt.plot(np.arange(0, len(eq_ngdcurve)), eq_ngdcurve, linestyle = '--', markersize=3, color = 'red', label = f"NGD q_init={eq_q}, s = {ngd_s}, h = {ngd_h}")
 
-    # plot all curves for each q_init
-    for i, (gd_params, data_points) in enumerate(curves.items()):
-        print(gd_params, data_points)
-        gd_s, gd_c, gd_h, q_init = gd_params
-        gd_params = {'s': gd_s, 'h':gd_h, 'c': gd_c, 'q0': q_init, 'target_steps': 40000}
-        q_init, ngd_s, ngd_h = data_points
-        gd_curve = run_model(gd_params)['q'][:201]
-        ngd_curve = wm(ngd_s, ngd_h, 40000, q_init)['q'][:201]
-        color1 = cmap1(norm(q_init))
-        # color2 = cmap2(norm(q_init))
-        plt.plot(np.arange(0, len(gd_curve)), gd_curve, marker = 'o', linestyle = '-', markersize=3, color = color1, label = f"GD q_init={q_init}, s = {gd_s}, c = {gd_c}, h = {gd_h}")
-        plt.plot(np.arange(0, len(ngd_curve)), ngd_curve, linestyle = '--', markersize=3, color = color1, label = f"NGD q_init={q_init}, s = {ngd_s}, h = {ngd_h}")
-    # for i, (gd_params, data_points) in enumerate(curves.items()):
-    #     q_vals = [dp[0] for dp in data_points]
-    #     s_vals = [dp[1] for dp in data_points]
-    #     label = f's={gd_params[0]}, c={gd_params[1]}, h={gd_params[2]}'
-    #     plt.plot(q_vals, s_vals, marker='o', label=label)
-
     plt.xlabel('Time Steps')
     plt.ylabel('Mapped GD and NGD curves over different q_init')
-    plt.title('Change in Mapping with different q_init')
+    plt.title(f'GD vs NGD with different q_init for Unstable Regime (s={current_gd[0]}, c={current_gd[1]}, h={current_gd[2]})')
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(f"unstable_plots/h{currH}_s{ts}_c{tc}_unstable.jpg", dpi=600)
+    plt.savefig(f"unstable_plots/h{currH}_s{ts}_c{tc}_unstable_all.jpg", dpi=600)
     plt.show()
 
 '''
@@ -1205,7 +1263,7 @@ def plot_sngd_all(currH):
 
     gd_configs, _ = gd_results[0], gd_results[1]
     currH = float(currH)
-    configs_to_plot = [(0.1, 0.1, currH), (0.1, 0.2, currH), (0.2, 0.5, currH), (0.2, 0.8, currH)]
+    configs_to_plot = [(0.1, 0.1, currH), (0.1, 0.9, currH), (0.2, 0.2, currH), (0.2, 0.6, currH), (0.4, 0.6, currH), (0.5, 0.9, currH)]
 
     grid_map, _ = gridResult['map'], gridResult['ngC']
 
@@ -1230,7 +1288,7 @@ def plot_sngd_all(currH):
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.legend(fontsize=9, title="GD config", ncol=2)
     plt.tight_layout()
-    plt.savefig("sngd_curves_all_configs.png", dpi=600)
+    plt.savefig(f"h{currH}_sngd_curves_all_configs.png", dpi=600)
     plt.show()
 
 def plot_diff(currH):
@@ -1250,6 +1308,8 @@ def plot_diff(currH):
     # collect data
     all_s, all_c, all_diff = [], [], []
 
+    solved_res = dict()
+
     for (s_gd, c_gd, h_gd) in gd_configs:
         if not math.isclose(h_gd, float(currH)):
             continue
@@ -1267,14 +1327,36 @@ def plot_diff(currH):
         # (b) solved NGD from analytic formula
         solved_s, solved_h = solve_sngd(s_gd, c_gd, h_gd)
         solved_curve = wm(solved_s, solved_h, 40000, 0.001)['q']
+        solved_res[(s_gd, c_gd, h_gd)] = [(solved_s, solved_h), solved_curve]
 
         # trajectory difference
         diff = euclidean(mapped_curve, solved_curve)
+        debug = False
+
+        ### DEBUGGING SPECIFIC CONFIGURATION ##################
+
+        if debug and math.isclose(s_gd, 0.2) and math.isclose(c_gd, 0.95):
+            print("solved params", solved_s, solved_h)
+            plt.figure(figsize=(8,6))
+            plt.plot(mapped_curve, label='Mapped NGD', color='blue')
+            plt.plot(solved_curve, label='Solved NGD', color='orange')
+            plt.xlabel('Generation')
+            plt.ylabel('Allele frequency q(t)')
+            plt.title(f'Comparison of Mapped vs Solved NGD Trajectories\n'
+                      f'for GD (s={s_gd}, c={c_gd}, h={h_gd})')
+            plt.legend()
+            plt.grid(True, linestyle='--', alpha=0.5)
+            plt.tight_layout()
+            plt.savefig(f"plots_diff/mapped_vs_solved_h{currH}_s{s_gd}_c{c_gd}_q02.png", dpi=600)
+            plt.show()
+        ### DEBUGGING SPECIFIC CONFIGURATION ##################
 
         all_s.append(s_gd)
         all_c.append(c_gd)
         all_diff.append(diff)
-
+    
+    save_pickle(f"solved_results/solved_res_h{currH}.pickle", solved_res)
+    
     # convert to arrays
     all_s = np.array(all_s)
     all_c = np.array(all_c)
@@ -1285,14 +1367,15 @@ def plot_diff(currH):
 
     # scatter heatmap
     plt.figure(figsize=(8,6))
-    norm = mcolors.Normalize(vmin=np.min(all_diff), vmax=np.max(all_diff))
+    print(np.min(all_diff), np.max(all_diff))
+    norm = mcolors.Normalize(vmin=np.min(all_diff), vmax=0.00728)
+    # norm = mcolors.Normalize(vmin=0.0, vmax=0.6)
     sc = plt.scatter(
         all_c, all_s,
         c=all_diff,
         cmap='BuPu',
         norm=norm,
         s=50,
-        edgecolors='k',
         linewidths=0.3,
         alpha=0.8
     )

@@ -23,7 +23,7 @@ def wm(s, h, target_steps, q_init):
         # print("step=%2d, currq=%.8f, q=%.20f, p=%.8f"%(t, q_freqs[t], q_freqs[t+1], p_freqs[t+1]))
 
         if (q_freqs[t+1] < 0 or q_freqs[t+1] > 1 or math.isclose(q_freqs[t+1], 1) or math.isclose(q_freqs[t+1], 0) 
-            or math.isclose(curr_q, q_freqs[t+1], rel_tol=1e-20)):
+            or math.isclose(curr_q, q_freqs[t+1], rel_tol=1e-10)):
             if t == 0:
                 print("STOP AT step=%2d, w=%.4f, q=%.20f, p=%.8f, s=%.4f, h=%.4f"%(t, w[t], q_freqs[t+1], p_freqs[t+1], s, h))
             final = t+1

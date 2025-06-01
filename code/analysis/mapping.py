@@ -5,6 +5,8 @@ import sys, os
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import sympy as sp
+import concurrent.futures
+from itertools import repeat
 
 from .stability import derivative, compute_lambda_gd
 # from .plotting import plot_lambda_curve
@@ -387,9 +389,8 @@ def same_eq(s_ngd, h_ngd, eq):
 def find_candidate(
         s_ngd:float, 
         h_ngd:float, 
-        q_ngd:float, 
-        state:str, 
-        gd_config:tuple, 
+        q_ngd:float,
+        state:str,  
         gd_curve:list, 
         eq:float) -> tuple:
     """
@@ -405,6 +406,7 @@ def find_candidate(
         return None, np.inf
 
     # compute trajectory and metrics
+
     traj = wm(s_ngd, h_ngd, len(gd_curve), q_ngd)['q']
     if len(traj) == 1:
         # print("TRAJ LENGTH 1", s_ngd, h_ngd, q_ngd)
@@ -412,9 +414,42 @@ def find_candidate(
         # print(gd_curve)
         return None, np.inf
     mse = euclidean(traj, gd_curve)  # MSE
-    delta_lambda, ngd_lambda = get_delta_lambda(gd_config, (s_ngd, h_ngd), eq)
+    # delta_lambda, ngd_lambda = get_delta_lambda(gd_config, (s_ngd, h_ngd), eq)
     return (traj, mse)
 
+def evaluate_sngd(s_ngd, h_ngd, params, q_init_list, eq, state, gd_config):
+    s_ngd = round(s_ngd, 3)
+    s, c, h = gd_config
+    all_q_MSE = 0
+    if s_ngd * h_ngd > 1:
+        # print("s_ngd * h_ngd > 1", s_ngd, h_ngd)
+        return s_ngd, np.inf, None
+    new_params = params.copy()
+    new_params['s'] = round(s, 3)
+    new_params['c'] = round(c, 3)
+    new_params['h'] = round(h, 3)
+    for q_ngd in q_init_list:
+        curr_ngd_curve = None
+        if q_ngd == eq:
+            print("q_ngd == eq", q_ngd)
+            continue
+        # print(new_params)
+        new_params['q0'] = q_ngd
+        gd_curve = run_model(new_params)['q']
+        ### DEBUGGING
+        # if q_ngd == 0.2:
+        #     print("Q=0,2", gd_curve)
+        # out1.write(f"q_init = {q_ngd:.4f}=====\n")
+        ### check candidate and get MSE
+        res = find_candidate(s_ngd, h_ngd, q_ngd, state, gd_curve, eq)
+        if res[1] != np.inf:
+            curr_ngd_curve, curr_MSE = res[0], res[1]
+            all_q_MSE += curr_MSE
+        # if math.isclose(s, 0.3) and math.isclose(c, 0.2):
+        #     print("SINGLE S RESULT", s_ngd, curr_ngd_config, curr_MSE)
+        # print(curr_ngd_config, curr_MSE)
+    return s_ngd, all_q_MSE, curr_ngd_curve
+        
 #### grid search only ################
 def grid_mapping(params, gdFile):
     seffMap = dict()
@@ -424,8 +459,8 @@ def grid_mapping(params, gdFile):
     state = "Unstable"
     ### !!! CHANGE THE FILE NAME IF RUNNING FOR ALL !!!!!!
     # f_out: the text file tto store (s,c,h) -> (s_ngd, h_ngd) mapping
-    # f_out = open(f"h{params['h']}_grid_G{gdFile}_stable.txt", 'w'
-    f_out = open(f"unstable_mapping_v2/h{params['h']}_s{ts}_c{tc}_grid_G_unstable.txt", 'w')
+    f_out = open(f"unstable_mapping_v2/h{params['h']}_grid_G{gdFile}_unstable.txt", 'w')
+    # f_out = open(f"unstable_mapping_v2/h{params['h']}_s{ts}_c{tc}_grid_G_unstable.txt", 'w')
     f_out.write(f"Gene Drive Configuration\t\t(s, h) in NGD population (S_Effective)\n")
 
     ### LOADING NECESSARY RESULTS FOR MAPPING 
@@ -441,13 +476,13 @@ def grid_mapping(params, gdFile):
         params_eq = {'s': s, 'c': c, 'h': h, 'conversion': 'gametic'}
         eq = get_eq(params_eq)['q3']
 
-        # if ((s, c, h), eq) in stabilityRes[state]:
-        if ((s, c, h), eq) in stabilityRes[state] and math.isclose(s, ts) and math.isclose(c, tc):
+        if ((s, c, h), eq) in stabilityRes[state]:
+        # if ((s, c, h), eq) in stabilityRes[state] and math.isclose(s, ts) and math.isclose(c, tc):
         # if gd_res[(s,c,h)]['state'] == 'fix':
-            print("!!!!!!!!!!!!!!!!!!!!!!!!!")
+            print(f"!!!!!!!!!!!!!!!!!!!!!!!!!{state} Mapping!!!!")
             print(s, c, h)
             gd_curve = gd_res[(s, c, h)]['q']
-            all_best_diff = dict()
+            all_best_diff = dict() 
             
             # outtxt: the text file to store the MSE for each s_ngd
             output_folder = f"sngd_candidates"
@@ -460,6 +495,8 @@ def grid_mapping(params, gdFile):
 
                 if math.isclose(eq, 0.5):
                     continue
+               
+                #### compute h_ngd first
                 h_ngd = eq/(2*eq-1)
                 # print('----h_ngd----', h_ngd)
                 # print("STABLE MAPPING WITH H_ngd =", h_ngd)
@@ -473,52 +510,34 @@ def grid_mapping(params, gdFile):
                 best_ngd_config = None
                 best_diff = np.inf
                 s_values = np.arange(-10.0, 1.0, 0.01)
-                for s_ngd in s_values: # loop through s_ngd to find the best candidate
-                    s_ngd = round(s_ngd, 3)
-                    out1.write(f"s_ngd = {s_ngd:.4f}---------------------\n")
-                    all_q_MSE = 0
-                    if s_ngd * h_ngd > 1:
-                        # print("s_ngd * h_ngd > 1", s_ngd, h_ngd)
-                        continue
-                    for q_ngd in q_init_list:
-                        if q_ngd == eq:
-                            print("q_ngd == eq", q_ngd)
+                gd_config = (s, c, h)
+
+                with concurrent.futures.ProcessPoolExecutor() as exe:
+                # exe.map can take multiple iterables in parallel
+                    for s_ngd, all_q_MSE, traj in exe.map(
+                        evaluate_sngd, 
+                        s_values, 
+                        repeat(h_ngd),
+                        repeat(params),
+                        repeat(q_init_list),
+                        repeat(eq),
+                        repeat(state),
+                        repeat(gd_config)
+                    ):
+                        if traj is None:
                             continue
-                        new_params = params.copy()
-                        new_params['s'] = round(s, 3)
-                        new_params['c'] = round(c, 3)
-                        new_params['h'] = round(h, 3)
-                        new_params['q0'] = q_ngd
-                        # print(new_params)
-                        gd_curve = run_model(new_params)['q']
-                        ### DEBUGGING
-                        # if q_ngd == 0.2:
-                        #     print("Q=0,2", gd_curve)
-                        # out1.write(f"q_init = {q_ngd:.4f}=====\n")
-                        ### check candidate and get MSE
-                        res = find_candidate(s_ngd, h_ngd, q_ngd, state, (s, c, h), gd_curve, eq)
-                        if res[1] == np.inf:
-                            # print("NO CANDIDATE", s_ngd, h_ngd, q_ngd)
-                            continue
-                        curr_ngd_curve, curr_MSE = res[0], res[1]
-                        all_q_MSE += curr_MSE
-                        # if math.isclose(s, 0.3) and math.isclose(c, 0.2):
-                        #     print("SINGLE S RESULT", s_ngd, curr_ngd_config, curr_MSE)
-                        # print(curr_ngd_config, curr_MSE)
+                        out1.write(f"s_ngd = {s_ngd:.4f}---------------------\n")
+                        if 0 < all_q_MSE < best['mse']:
+                            best['mse'], best['s_ngd'], best['traj'] = all_q_MSE, s_ngd, traj
+                        
+                        out1.write(f"s_ngd={s_ngd:.3f}, h_ngd={h_ngd:.3f}, curr_mse={all_q_MSE:.6f}\n")
 
-                    if all_q_MSE < best['mse'] and all_q_MSE != 0:
-                        best.update({'mse': all_q_MSE, 's_ngd': s_ngd, 'traj': curr_ngd_curve})
+                # all_q_MSE, curr_ngd_curve = evaluate_sngd(s_ngd, h_ngd, eq, state, gd_curve, new_params, q_init_list, out1)
 
-                    # print(q_ngd, best_diff)
-                    
-                        ### get delta_lambda
-                        # delta_lambda = get_delta_lambda((s, c, h), best_ngd_config[q_ngd], eq)
-                        # for each s_ngd, store the MSE and delta lambda
-                        # write best for this q_init
-                    out1.write(f"s_ngd={s_ngd:.3f}, h_ngd={h_ngd:.3f}, curr_mse={all_q_MSE:.6f}\n")
+                # if all_q_MSE < best['mse'] and all_q_MSE != 0:
+                #     best.update({'mse': all_q_MSE, 's_ngd': s_ngd, 'traj': curr_ngd_curve})
 
-                    # out1.write(f"q_init={q_ngd:.4f}: s_ngd={s_ngd:.4f}, MSE={best_diff:.6f}\n")
-                    all_best_diff[s_ngd] = best['mse']
+                # print(q_ngd, best_diff)
 
             best_ngd_config, best_ngd_curve, best_diff = best['s_ngd'], best['traj'], best['mse']
             if best_ngd_config == None: 
@@ -526,6 +545,7 @@ def grid_mapping(params, gdFile):
                 continue
 
             # summary line
+            print("####Writing best NGD config to f_out####")
             f_out.write(
                 f"s={s:.3f}, c={c:.3f}, h={h:.3f}\t"
                 f"s_ngd={best['s_ngd']:.3f}, h_ngd={h_ngd:.3f}, MSE={best['mse']:.6f}\n"
@@ -542,10 +562,10 @@ def grid_mapping(params, gdFile):
 
     #             f_out.write(f"s={'%.3f' % s}, c={'%.3f' % c}, h={'%.3f' % h}\t\tq_init={qkey:.4f}, s_NGD={'%.3f' % float(best_config[0])}, h_NGD={'%.3f' % float(best_config[1])}\terror={'%.6f' % float(best_mse)}\n")
 
-    #         output_folder = "gd_candidates"
-    #         # pickle_filename = os.path.join(output_folder, f"gd{(s, c, h)}_{state}_res.pickle")
-    #         # Save the results dictionary into a pickle file.
-    #         # save_pickle(pickle_filename, s_mse_map)
+    output_folder = "unstable_mapping_results"
+    pickle_filename = os.path.join(output_folder, f"{params['h']}_{state}_grid_{gdFile}.pickle")
+    # Save the results dictionary into a pickle file.
+    save_pickle(pickle_filename, seffMap)
     #         # print(s_mse_map)
     
     # # print(seffMap)

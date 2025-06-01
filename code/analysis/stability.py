@@ -218,20 +218,23 @@ def plot_regions(allres, state, conversion):
     eq_values = [max(0, min(1, config[1])) for config in unstable_configurations]
 
     # Plotting
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(8, 6))
     norm = mcolors.Normalize(min(eq_values), max(eq_values))
-    cmap = plt.cm.get_cmap('viridis')
+    cmap = plt.cm.get_cmap('Blues')
     # plt.figure(figsize=(8, 6))
     # plt.scatter(c_values, s_values, alpha=0.7, edgecolors='k', label=f"Unstable Configurations" )
-    scatter = ax.scatter(c_values, s_values, c=eq_values, cmap=cmap, s=50, norm=norm)
-    cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
-    cbar.set_label('Gene Drive Allele Frequency at Eq')
+    if state != 'Fixation' and state != 'Loss':
+        scatter = ax.scatter(c_values, s_values, c=eq_values, cmap=cmap, s=50, norm=norm)
+        cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
+        cbar.set_label('Gene Drive Allele Frequency at Eq')
+    else: 
+        scatter = ax.scatter(c_values, s_values, color = '#8488d1', s=50, norm=norm)
 
     # Adding labels, title, and legend
     ax.set_xlabel('Conversion Factor (c)', fontsize=12)
     ax.set_ylabel('Selection Coefficient (s)', fontsize=12)
     # plt.title(f'Scatter Plot of {state} Configurations', fontsize=14)
-    ax.set_title(f"Plot of Equilibrium Values in the {state} Regime ({conversion} model)", fontsize=14)
+    ax.set_title(f"Equilibrium Values in the {state} Regime at gd_h = {h_val}", fontsize=14)
     ax.set_xlim([0, 1])
     ax.set_ylim([0, 1])
     ax.set_aspect('equal')
@@ -519,17 +522,17 @@ def plot_ngd_partition(df, q_init=None, save_path=None):
 def main():
     s=0.6
     c=0.6
-    h=0.6
+    h=0.8
     q_init=0.001
-    regime = 'Unstable'
+    regime = 'Fixation'
     params = {'config':(s, c, h), 'q0':q_init, 'conversion': "gametic"}
     filename = f"h{h}_{params['conversion']}_stability_res.pickle"
 
     ##########################################################
     # OLD VERSION OF PLOTTING GD PARTITION
     # run through all configurations
-    allres = runall(params)
-    save_pickle(filename, allres) ### change file name
+    # allres = runall(params)
+    # save_pickle(filename, allres) ### change file name
     
     allres = load_pickle(filename)
 
