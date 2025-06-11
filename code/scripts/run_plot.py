@@ -6,7 +6,7 @@ from analysis import plot_mapping, plot_gd, plotMapDiff, ploterror, partition, p
 
 '''
 ploterror: (run getDiff.py first) Error Heatmap for the Grid/gradient Mapping from GD to NGD Haploid Model at some h
-plotMapDiff: Error heatmap for haploid_se vs GD at some h
+plotMapDiff: (run getHapseMapDiff first) Error heatmap for haploid_se vs GD at some h
 partition: partition plot for stable/unstable/fixation/loss regimes
 plot_mapping: plot the curves for a specific mapping for certain configurations
 '''

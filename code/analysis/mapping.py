@@ -298,9 +298,14 @@ def hap_gradient(ngd_s, s, c, h, params, gdFile):
     return vars
 
 def hap_grid_mapping(params, gdFile):
+    '''
+    Map haploid gene drive configurations to the stable NGD configurations.
+    Write the results to a text file in the mapping_result_txt folder. 
+    Add flag -s to store results in as .pickle under mapping_result
+    '''
     seffMap = dict()
     hapMappedCurves = []
-    f_out = open(f"h{params['h']}_hap_grid{gdFile}_G_fix_map.txt", 'w')
+    f_out = open(f"mapping_result_txt/h{params['h']}_hap_grid{gdFile}_G_fix_map.txt", 'w')
     f_out.write(f"Gene Drive Configuration\t\ts in haploid ngd population\n")
 
     gd_results = loadGres(params['h'], gdFile)
@@ -341,7 +346,7 @@ def hap_grid_mapping(params, gdFile):
 def hap_gradient_mapping(params, gdFile):
     seffMap = dict()
     hapMappedCurves = []
-    f_out = open(f"h{params['h']}_hap_gradient{gdFile}_G_fix_map.txt", 'w')
+    f_out = open(f"mapping_result_txt/h{params['h']}_hap_gradient{gdFile}_G_fix_map.txt", 'w')
     f_out.write(f"Gene Drive Configuration\t\ts in haploid ngd population\n")
 
     gd_results = loadGres(params['h'], gdFile)
@@ -421,6 +426,7 @@ def evaluate_sngd(s_ngd, h_ngd, params, q_init_list, eq, state, gd_config):
     s_ngd = round(s_ngd, 3)
     s, c, h = gd_config
     all_q_MSE = 0
+    ### boundary for s_ngd and h_ngd
     if s_ngd * h_ngd > 1:
         # print("s_ngd * h_ngd > 1", s_ngd, h_ngd)
         return s_ngd, np.inf, None
@@ -479,7 +485,7 @@ def grid_mapping(params, gdFile):
         if ((s, c, h), eq) in stabilityRes[state]:
         # if ((s, c, h), eq) in stabilityRes[state] and math.isclose(s, ts) and math.isclose(c, tc):
         # if gd_res[(s,c,h)]['state'] == 'fix':
-            print(f"!!!!!!!!!!!!!!!!!!!!!!!!!{state} Mapping!!!!")
+            print(f"===================={state} Mapping===============")
             print(s, c, h)
             gd_curve = gd_res[(s, c, h)]['q']
             all_best_diff = dict() 
@@ -509,6 +515,7 @@ def grid_mapping(params, gdFile):
                 best = {'mse': np.inf, 's_ngd': None, 'traj': None}
                 best_ngd_config = None
                 best_diff = np.inf
+                ### range of s_ngd to test: -10.0 to 1.0
                 s_values = np.arange(-10.0, 1.0, 0.01)
                 gd_config = (s, c, h)
 
@@ -566,9 +573,9 @@ def grid_mapping(params, gdFile):
     pickle_filename = os.path.join(output_folder, f"{params['h']}_{state}_grid_{gdFile}.pickle")
     # Save the results dictionary into a pickle file.
     save_pickle(pickle_filename, seffMap)
-    #         # print(s_mse_map)
+            # print(s_mse_map)
     
-    # # print(seffMap)
+    # print(seffMap)
     
     return seffMap
         

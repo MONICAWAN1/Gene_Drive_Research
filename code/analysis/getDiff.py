@@ -28,6 +28,7 @@ def getdiff(currH, mapfunction, gdFile):
     '''
     given gd results and one mapping result
     saves a dictionary (s,c,h): error of map
+    store results as .txt in mapping_diff_txt folder and as .pickle in mapping_diff folder
     '''
     # test s, c values
     ts = 0.2
@@ -35,7 +36,7 @@ def getdiff(currH, mapfunction, gdFile):
     state = "fix"
 
     loadFile = f"gd_simulation_results/h{currH}_allgdres{gdFile}G.pickle"
-    fileName = f"h{currH}_mappingdiff_{mapfunction}{gdFile}_G_{state}.txt"
+    fileName = f"mapping_diff_txt/h{currH}_mappingdiff_{mapfunction}{gdFile}_G_{state}.txt"
     f_out = open(fileName, 'w')
     print(f"writing to {fileName}")
     f_out.write(f"Gene Drive Configuration\t\t{mapfunction} result\t\tMSE error compared to Gene Drive\n")
@@ -45,11 +46,11 @@ def getdiff(currH, mapfunction, gdFile):
     gd_configs, gd_res = gd_results[0], gd_results[1]
     stabilityRes = load_pickle(f"h{currH}_gametic_stability_res.pickle")
 
-    savedPickle = f"h{currH}_mappingdiff_{mapfunction}{gdFile}_{state}.pickle"
+    savedPickle = f"mapping_diff/h{currH}_mappingdiff_{mapfunction}{gdFile}_{state}.pickle"
 
     # with open('pickle/allngdres.pickle', 'rb') as f1:
     #     wm_results = pickle.load(f1)
-    gridResFile = f"h{currH}_{mapfunction}{gdFile}_G_{state}.pickle"
+    gridResFile = f"mapping_result/h{currH}_{mapfunction}{gdFile}_G_{state}.pickle"
     gridResult = load_pickle(gridResFile)
 
     sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
@@ -85,7 +86,7 @@ def getdiff(currH, mapfunction, gdFile):
     save_pickle(savedPickle, diffmap)
 
 def main():
-    getdiff(0.0, "gradient")
+    getdiff(0.3, "hap_grid", "001")
 
 if __name__ == '__main__':
     main()

@@ -60,7 +60,7 @@ from utils import load_pickle,save_pickle
 
 def derivative(params):
     s, c, h = params['config']
-    q = params['currq']
+    q = params['q0']
     if params['conversion'] == 'zygotic':
         sc = c*(1-s)
     else:
@@ -98,12 +98,47 @@ def get_eq(params):
     eqs['q3'] = q3
     return eqs
 
+from analysis.solve_partition import get_dq
+
+def check_fixation(params):
+    s, c, h = params['config']
+    dq_1, dq_0 = get_dq(s, c, h)
+    if dq_1 < 1 and dq_0 > 1:
+        return True
+    return False
+
+def classify_regime(params):
+    """
+    Given params['config'] = (s,c,h) and base_state in {'fix','loss'},
+    returns (regime_name, eq_value) or None if it shouldn't be stored.
+    """
+    eqs = get_eq(params)
+    s, c, h = params['config']
+    q3 = eqs['q3']
+    # 1) internal equilibrium?
+    if isinstance(q3, float) and 0 < q3 < 1:
+        slope = derivative(params)
+        if slope == 'NA':
+            return None
+        if abs(slope) < 1:
+            return 'Stable',   q3
+        if abs(slope) > 1:
+            return 'Unstable', q3
+        return 'dq=1', q3
+
+    # 2) no valid internal eq → fix / loss
+    fixation_state = check_fixation(params)
+    if fixation_state:
+        return 'Fixation', 1.0
+    else:
+        return 'Loss', 0.0
+
 # get_eq({'config':(0.2, 0.8, 0), 'q0':0.001, 'conversion': "zygotic"})
 '''
 return allres: dict{"state": [(config1, eq), ...]}
 '''
 def runall(params):
-    allres = {'Stable': [], 'Unstable': [], 'dq=1': [], 'Fixation': [], 'Loss':[]}
+    allres = {'Stable': {}, 'Unstable': {}, 'dq=1': {}, 'Fixation': {}, 'Loss':{}}
     if params['conversion'] == 'zygotic':
         gdres_file = f"gd_simulation_results/h{params['config'][2]}_allgdres001.pickle"
     else:
@@ -122,55 +157,80 @@ def runall(params):
             if config not in configs:
                 continue
 
-            alleq=get_eq(params) ### get all eq points for the current config
-            eq1, eq2, eq3 = alleq['q1'], alleq['q2'], alleq['q3']
-
-            # compute stability for eq3
-
-            if eq3 != 'NA' and 0 < eq3 and eq3 < 1 and not math.isclose(eq3, 0) and not math.isclose(eq3, 1):
-                params['currq']=eq3
-                eq_stability = derivative(params)
-                # print(f"config = {params['config']}, slope={eq_stability}")
-
-                # if slope < 1: stable
-                if 0 < eq3 < 1 and eq_stability != 'NA':
-                    if abs(eq_stability) < 1:
-                        allres['Stable'].append((params['config'], eq3))
-                    elif abs(eq_stability) > 1:
-                        allres['Unstable'].append((params['config'], eq3))
-                    elif math.isclose(eq_stability, 1):
-                        allres['dq=1'].append((params['config'], eq3))
-                # find fixation and loss
-            elif eq3 != 'NA' and (eq3 >= 1 or eq3 <= 0 or math.isclose(eq3, 0) or math.isclose(eq3, 1)):
-                if math.isclose(eq3, 1) or res[params['config']]['state'] == 'fix':
-                    allres['Fixation'].append((params['config'], 1.0))
-                elif res[params['config']]['state'] == 'loss':
-                    allres['Loss'].append((params['config'], 0.0))
-            # if math.isclose(s, 0.08) and math.isclose(c, 0.08):
-            #     print('something eq3', eq3, math.isclose(eq3, 1))
-            #     print(((s, c, h), eq3) in allres['Fixation'])
-            elif eq3 == 'NA':
-                if res[params['config']]['state'] == 'loss':
-                    allres['Loss'].append((params['config'], 0.0))
-                elif res[params['config']]['state'] == 'fix':
-                    allres['Fixation'].append((params['config'], 1.0))
+            state, eqval = classify_regime(params)
+            allres[state][config]=eqval
     # -----------------------------------------------------------------
     # write the dictionary to a text file
     # -----------------------------------------------------------------
     os.makedirs("phase_partition", exist_ok=True)
     h_val = h
-    fname = f"phase_partition/partition_h{h_val}.txt"
+    fname = f"phase_partition/partition_h{h_val}_new.txt"
     with open(fname, "w") as fout:
         for regime in ['Stable', 'Unstable', 'dq=1', 'Fixation', 'Loss']:
             fout.write(f"## {regime}\n")
-            for (cfg, eq) in allres[regime]:
-                s_val, c_val, h_val = cfg
-                fout.write(f"s={s_val:.3f}, c={c_val:.3f}, h={h_val:.3f}, eq={eq:.4f}\n")
+            for key, val in allres[regime].items():
+                s_val, c_val, h_val = key
+                fout.write(f"s={s_val:.3f}, c={c_val:.3f}, h={h_val:.3f}, eq={val:.4f}\n")
             fout.write("\n")
 
     print(f"Partition written to {fname}")
         
     return allres
+
+def plot_all_by_regime(allres, params):
+    '''
+    plot the partition of gene drive configurations based on final result 
+    by colors
+
+    '''
+    fig, ax = plt.subplots()
+    fig.set_size_inches(8, 6)
+
+    # pick a qualitative colormap and get one color per state
+    cmap      = plt.cm.get_cmap('Set3')
+    states    = list(allres.keys())
+    n_states  = len(states)
+    color_map = { state: cmap(i % cmap.N) for i, state in enumerate(states) }
+
+    for state in allres.keys():
+        # unpack s and c
+        configs = allres[state].keys()
+        s_values = [c[0] for c in configs]
+        c_values = [c[1] for c in configs]
+
+        if not configs:
+            continue
+
+        ax.scatter(
+            c_values,
+            s_values,
+            color=color_map[state],
+            label=state,
+            s=50,
+            alpha=0.8,
+        )
+
+    # tidy up
+    ax.set_xlabel('Conversion Factor (c)', fontsize=12)
+    ax.set_ylabel('Selection Coefficient (s)', fontsize=12)
+    ax.set_title(
+        f"Partition of Gene Drive Configurations Based on Stability (H={params['config'][2]})",
+        fontsize=14
+    )
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_aspect('equal')
+    ax.grid(True)
+
+    # draw legend
+    ax.legend(title='Regime', fontsize=10, title_fontsize=11, loc='upper right')
+
+    # save & show
+    plt.rcParams['pdf.fonttype'] = 42  # Ensure text remains text
+    plt.rcParams['ps.fonttype'] = 42
+    plt.tight_layout()
+    plt.savefig(f"plot_partition/gd_h{params['config'][2]}.pdf", format="pdf", bbox_inches="tight")
+    plt.show()
             
 def plot_all(allres, params):
     fig, ax = plt.subplots()
@@ -206,6 +266,7 @@ def plot_all(allres, params):
 
     # Show plot
     plt.grid(True)
+    plt.savefig(f"plot_partition/gd_h{params['config'][2]}.jpg", dpi=600)
     plt.show()
 
 
@@ -522,30 +583,30 @@ def plot_ngd_partition(df, q_init=None, save_path=None):
 def main():
     s=0.6
     c=0.6
-    h=0.8
+    h=0.3
     q_init=0.001
     regime = 'Fixation'
     params = {'config':(s, c, h), 'q0':q_init, 'conversion': "gametic"}
-    filename = f"h{h}_{params['conversion']}_stability_res.pickle"
+    filename = f"new_h{h}_{params['conversion']}_stability_res.pickle"
 
     ##########################################################
     # OLD VERSION OF PLOTTING GD PARTITION
     # run through all configurations
-    # allres = runall(params)
-    # save_pickle(filename, allres) ### change file name
+    allres = runall(params)
+    save_pickle(filename, allres) ### change file name
     
     allres = load_pickle(filename)
 
     # print(allres)
-    f_out = open(f"stability_res/h{h}_g_{regime}.txt", 'w') #### change file name!!!!
-    f_out.write(f"gene drive model configuration\t\tequilibrium\n")
-    for state in allres.keys():
-        if state == regime:  ### change state check
-            for config, eq_val in allres[state]:
-                f_out.write(f"(s, c, h) = {config}\t\teq = {eq_val}\n")
-    plot_regions(allres, regime, params['conversion'])
+    # f_out = open(f"stability_res/h{h}_g_{regime}.txt", 'w') #### change file name!!!!
+    # f_out.write(f"gene drive model configuration\t\tequilibrium\n")
+    # for state in allres.keys():
+    #     if state == regime:  ### change state check
+    #         for config, eq_val in allres[state]:
+    #             f_out.write(f"(s, c, h) = {config}\t\teq = {eq_val}\n")
+    # plot_regions(allres, regime, params['conversion'])
     #
-    # plot_all(allres, params)
+    plot_all_by_regime(allres, params)
     # dfunc = compute_lambda()
     # params = {'config': (0.5,0.3,0.3), 'q0': 0.001, 'conversion': 'gametic'}
     # eq = get_eq(params)['q3']
