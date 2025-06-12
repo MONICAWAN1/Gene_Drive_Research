@@ -285,7 +285,16 @@ def plotMapDiff(currH):
         diff_map[row_idx, col_idx] = hapseDiffMap[(s,c,h)]
 
     X, Y = np.meshgrid(all_c, all_s)
-    cmap = plt.get_cmap('PuBuGn')
+    import matplotlib.colors as mcolors
+
+    def truncate_colormap(cmap, minval=0.1, maxval=0.7, n=256):
+        new_colors = cmap(np.linspace(minval, maxval, n))
+        new_cmap = mcolors.LinearSegmentedColormap.from_list(
+            f'truncated({cmap.name},{minval:.2f},{maxval:.2f})', new_colors)
+        return new_cmap
+
+    base_cmap = plt.get_cmap('bwr')
+    cmap = truncate_colormap(base_cmap, 0.5, 1.0)
     cmap.set_bad('white')
 
     # Define min and max values for color normalization
@@ -315,7 +324,7 @@ def plotMapDiff(currH):
     plt.xlabel('c in gene drive', fontsize=15)
     plt.ylabel('s in gene drive', fontsize=15)
     plt.title(f'Difference Heatmap: GD vs. Haploid Se at h = {currH}')
-    plt.savefig(f"mapping_diff_figures/h{currH}_mappingdiff_gdhapse001_fix.pdf", format="pdf", dpi=600, bbox_inches='tight')
+    plt.savefig(f"mapping_diff_figures/h{currH}_mappingdiff_gdhapse001_fix_2.pdf", format="pdf", dpi=600, bbox_inches='tight')
     plt.show()
 
 
@@ -537,7 +546,7 @@ def ploterror(currH):
         figure_file = f"unstable_mapping_v2/h{currH}_maperror_unstable.pdf"
     elif state == "fixation":
         diffmapfile = f"mapping_diff/h{currH}_mappingdiff_{mapping_function}001_fix.pickle"
-        figure_file = f"mapping_diff_figures/h{currH}_mappingdiff_{mapping_function}001_fix.pdf"
+        figure_file = f"mapping_diff_figures/h{currH}_mappingdiff_{mapping_function}001_fix_2.pdf"
     diffmap = load_pickle(diffmapfile)
     # stability = load_pickle(f"h{currH}_gametic_stability_res.pickle")
 
@@ -561,12 +570,22 @@ def ploterror(currH):
     cmin, cmax = np.nanmin(errors), np.nanmax(errors)
     print(cmin, cmax)
     cmax = allmax
+    import matplotlib.colors as mcolors
+
+    def truncate_colormap(cmap, minval=0.5, maxval=1.0, n=256):
+        new_colors = cmap(np.linspace(minval, maxval, n))
+        new_cmap = mcolors.LinearSegmentedColormap.from_list(
+            f'truncated({cmap.name},{minval:.2f},{maxval:.2f})', new_colors)
+        return new_cmap
+
+    base_cmap = plt.get_cmap('bwr')
+    cmap = truncate_colormap(base_cmap, 0.5, 1.0)
 
     plt.figure(figsize=(9, 7))
     plt.imshow(
         errors,
         aspect='auto',
-        cmap='PuBuGn',
+        cmap=cmap,
         origin='lower',
         extent=[0, 1, 0, 1], 
         vmin=cmin,
