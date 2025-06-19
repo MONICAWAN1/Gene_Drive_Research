@@ -479,7 +479,7 @@ def main():
     q_init=0.001
     regime = 'Fixation'
     params = {'config':(s, c, h), 'q0':q_init, 'conversion': "gametic"}
-    filename = f"h{h}_{params['conversion']}_stability_res.pickle"
+    filename = f"new_h{h}_{params['conversion']}_stability_res.pickle"
 
     ##########################################################
     # OLD VERSION OF PLOTTING GD PARTITION

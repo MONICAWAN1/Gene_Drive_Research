@@ -311,8 +311,8 @@ def plotMapDiff(currH):
         cmap=cmap,
         origin='lower',
         extent=[0, 1, 0, 1],  # fixes axes to 0–1
-        vmin=vmin2,
-        vmax=vmax2
+        vmin=min_val,
+        vmax=max_val
     )
 
     plt.colorbar(label='Mean Squared Error (Error of mapping)')
@@ -430,7 +430,6 @@ def plot_mapping(currH):
             # solved_params, solved_curve = get_solved_curve(s, c, h, currH)
             # solved_s, solved_h = solved_params 
             # plt.plot(solved_curve, color = '#d16817', marker = 's', markersize = '2', label = f'solved curve ngd_s={solved_s:.4f}, ngd_h={solved_h:.4f}')
-
             # haploid trajectory
             if not diploid and (s, c, h) in sMap_grid and type(sMap_grid[(s,c,h)]) != tuple:
                 best_s_grid = sMap_grid[(s, c, h)]
@@ -439,7 +438,7 @@ def plot_mapping(currH):
                 time0 = np.arange(0, len(wm_curve_grid))
                 w_color1 = 'y'
                 plt.plot(time0, wm_curve_grid, marker = 'o', color = w_color1, markersize=3, linestyle = '-', label = f'grid search haploid NGD (s = {best_s_grid})')
-            
+    
             # diploid trajectory
             if diploid and (s, c, h) in sMap_grid_diploid:
                 # print("TRUEE")
@@ -586,7 +585,9 @@ def ploterror(currH):
         errors,
         aspect='auto',
         cmap=cmap,
+        cmap=cmap,
         origin='lower',
+        extent=[0, 1, 0, 1], 
         extent=[0, 1, 0, 1], 
         vmin=cmin,
         vmax=cmax
@@ -954,6 +955,7 @@ def plot_fixation_res(currH):
             s_ngd_vals = []
             se_vals = []
             he_vals = []
+
             h_ngd_vals = []
             stability = load_pickle(f"h{currH}_gametic_stability_res.pickle")
 
@@ -1462,7 +1464,6 @@ def plot_diff(currH):
 
     # sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
     sMap_grid = gridResult
-    # sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
 
     stabilityRes = load_pickle(f"h{currH}_gametic_stability_res.pickle")
     # collect data
@@ -1493,7 +1494,6 @@ def plot_diff(currH):
         
         gd_curve=gd_res[(s_gd, c_gd, h_gd)]
         gd_curve = run_model({'s': s_gd, 'c': c_gd, 'h': h_gd, 'q0':0.001,'target_steps': 40000})['q'][:201]
-
 
         # (b) solved NGD from analytic formula
         solved_s, solved_h = solve_sngd_unstable(s_gd, c_gd, h_gd)

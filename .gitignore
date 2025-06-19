@@ -34,6 +34,7 @@ code/analysis/plot_partition
 *.zip
 *.tar
 venv.tar.gz
+*.pdf
 .DS_Store
 *.sh
 *.sub
