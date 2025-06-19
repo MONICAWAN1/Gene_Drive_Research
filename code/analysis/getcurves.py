@@ -86,7 +86,7 @@ colormaps = ['Greys', 'Reds', 'YlOrBr', 'Oranges', 'PuRd', 'BuPu',
                       'GnBu', 'YlGnBu', 'PuBuGn', 'Greens']
 
 def main():
-    params = {'h': 0.6, 'target_steps': 40000, 'q0': 0.001}
+    params = {'h': 0.7, 'target_steps': 40000, 'q0': 0.001}
     getcurves(params)
     # gethaploid(params)
 

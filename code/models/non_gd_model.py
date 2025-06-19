@@ -62,7 +62,7 @@ def haploid_se(params):
             final = t+2
             break
 
-    state = checkState(final, freqs, params)
+    state = checkState(final, freqs)
     if state == None: print('none', freqs[t], freqs[t+1])
 
     return {'q': freqs[:final], 'w_bar': w[:final-1], 'state': state}

@@ -15,14 +15,27 @@ __pycache__/
 *.pyc
 *.pyo
 *.jpg
+*.pdf
+*.csv
 
 /venv/
 
 # Ignore large pickle files
 code/pickle/allgdres001.pickle
 code/pickle/allngdres.pickle
+code/OSG_submit/
+code/analysis/stability_res
+code/analysis/mapping_diff_txt
+code/analysis/phase_partition
+code/analysis/plot_partition
+
+
 
 *.zip
 *.tar
+venv.tar.gz
 .DS_Store
-.sh
+*.sh
+*.sub
+
+code/analysis/combine_data.py

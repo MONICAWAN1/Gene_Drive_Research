@@ -2,11 +2,11 @@ import argparse, sys, os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from analysis import plot_mapping, plot_gd, plotMapDiff, ploterror, partition, plot_errorh, getHapseMapDiff, plot_qmaps, gd_to_ngd_diff, plot_fixation_surface, plot_fixation_res, test_mapping_trajectory, plot_sngd, plot_sngd_all, plot_diff
+from analysis import plot_mapping, plot_gd, plotMapDiff, ploterror, partition, plot_errorh, getHapseMapDiff, plot_qmaps, gd_to_ngd_diff, plot_fixation_surface, plot_fixation_res, test_mapping_trajectory, plot_sngd, plot_sngd_all, plot_diff, plot_h_ngd_vs_h
 
 '''
 ploterror: (run getDiff.py first) Error Heatmap for the Grid/gradient Mapping from GD to NGD Haploid Model at some h
-plotMapDiff: Error heatmap for haploid_se vs GD at some h
+plotMapDiff: (run getHapseMapDiff first) Error heatmap for haploid_se vs GD at some h
 partition: partition plot for stable/unstable/fixation/loss regimes
 plot_mapping: plot the curves for a specific mapping for certain configurations
 '''
@@ -34,7 +34,8 @@ def main():
         "test_mapping_trajectory": test_mapping_trajectory,
         "plot_sngd": plot_sngd,
         "plot_sngd_all": plot_sngd_all,
-        "plot_diff": plot_diff
+        "plot_diff": plot_diff,
+        "plot_hh": plot_h_ngd_vs_h
     }
 
     if args.plot_function in plot_functions:

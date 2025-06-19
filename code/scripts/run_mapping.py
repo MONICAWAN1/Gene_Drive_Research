@@ -49,7 +49,7 @@ def main():
     tc = 0.9
     if args.s:
         print("Saving results and computing differences...")
-        save_pickle(f"h{args.h}_{args.map_function}{label}_G_fix.pickle", mapping_result)
+        save_pickle(f"mapping_result/h{args.h}_{args.map_function}{label}_G_fix.pickle", mapping_result)
 
         getdiff(args.h, args.map_function, label)
 

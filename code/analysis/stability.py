@@ -98,7 +98,6 @@ def get_eq(params):
     eqs['q3'] = q3
     return eqs
 
-# get_eq({'config':(0.2, 0.8, 0), 'q0':0.001, 'conversion': "zygotic"})
 '''
 return allres: dict{"state": [(config1, eq), ...]}
 '''
@@ -171,6 +170,60 @@ def runall(params):
     print(f"Partition written to {fname}")
         
     return allres
+
+def plot_all_by_regime(allres, params):
+    '''
+    plot the partition of gene drive configurations based on final result 
+    by colors
+
+    '''
+    fig, ax = plt.subplots()
+    fig.set_size_inches(8, 6)
+
+    # pick a qualitative colormap and get one color per state
+    cmap      = plt.cm.get_cmap('Set3')
+    states    = list(allres.keys())
+    n_states  = len(states)
+    color_map = { state: cmap(i % cmap.N) for i, state in enumerate(states) }
+
+    for state, configs in allres.items():
+        # unpack s and c
+        s_values = [c[0][0] for c in configs]
+        c_values = [c[0][1] for c in configs]
+
+        if not configs:
+            continue
+
+        ax.scatter(
+            c_values,
+            s_values,
+            color=color_map[state],
+            label=state,
+            s=50,
+            alpha=0.8,
+        )
+
+    # tidy up
+    ax.set_xlabel('Conversion Factor (c)', fontsize=12)
+    ax.set_ylabel('Selection Coefficient (s)', fontsize=12)
+    ax.set_title(
+        f"Partition of Gene Drive Configurations Based on Stability (H={params['config'][2]})",
+        fontsize=14
+    )
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_aspect('equal')
+    ax.grid(True)
+
+    # draw legend
+    ax.legend(title='Regime', fontsize=10, title_fontsize=11, loc='upper right')
+
+    # save & show
+    plt.rcParams['pdf.fonttype'] = 42  # Ensure text remains text
+    plt.rcParams['ps.fonttype'] = 42
+    plt.tight_layout()
+    plt.savefig(f"plot_partition/gd_h{params['config'][2]}.pdf", format="pdf", bbox_inches="tight")
+    plt.show()
             
 def plot_all(allres, params):
     fig, ax = plt.subplots()
@@ -206,6 +259,7 @@ def plot_all(allres, params):
 
     # Show plot
     plt.grid(True)
+    plt.savefig(f"plot_partition/gd_h{params['config'][2]}.jpg", dpi=600)
     plt.show()
 
 
@@ -347,16 +401,7 @@ def get_ngd_stability(s, h, q, f1_num):
 Given the NGD parameter (s, h), return the stable eq
 '''
 def get_eq_ngd(s, h):
-    # a2 = coef_funcs[0](s_val, h_val)
-    # a1 = coef_funcs[1](s_val, h_val)
-    # a0 = coef_funcs[2](s_val, h_val)
-    # roots = np.roots([a2, a1, a0])
-    # # filter real roots in (0,1)
-    # real_roots = roots[np.isreal(roots)].real
-    # for r in real_roots:
-    #     if math.isclose(r, 0.0) or math.isclose(r, 1.0):
-    #         real_roots = np.delete(real_roots, np.where(real_roots == r))
-    # return [r for r in real_roots if 0 < r < 1]
+
     if not math.isclose(h, 0.5):
         if (math.isclose(2*h*s - s, 0.0)):
             print(f'Division by zero: config = {(s, h)}')
@@ -401,20 +446,6 @@ def plot_ngd_partition(df, q_init=None, save_path=None):
     cbar = fig.colorbar(sc, ax=ax, pad=0.02)
     cbar.set_label('Equilibrium frequency $q_{eq}$', fontsize=12)
 
-    # scatter each regime separately so we get a legend
-    # for regime, color in palette.items():
-    #     sub = df[df['regime'] == regime]
-    #     if sub.empty:
-    #         continue
-    #     ax.scatter(
-    #         sub['s'], sub['h'],
-    #         c=color,
-    #         label=regime,
-    #         s=30,
-    #         alpha=0.7,
-    #         edgecolors='k',
-    #         linewidths=0.3
-    #     )
     
     # axes labels, title, grid, legend
     ax.set_xlabel('Selection coefficient $s$', fontsize=12)
@@ -440,89 +471,11 @@ def plot_ngd_partition(df, q_init=None, save_path=None):
     fig.savefig(save_path, dpi=600)
     plt.close(fig)
 
-### OLD VERSION OF NGD STABILITY ##########################################
-# def runall_ngd(q_init):
-#     allres = {'Stable': [], 'Unstable': [], 'dq=1': [], 'Fixation': [], 'Loss': []}
-#     dfunc = compute_lambda()
-
-#     for s in np.arange(-2, 2, 0.1):
-#         for h in np.arange(-2, 2, 0.1):
-#             s = round(float(s), 3)
-#             h = round(float(h), 3)
-#             # print(s, h)
-
-#             # eq = get_eq_ngd(s, h)
-#             eq = wm(s, h, 40000, q_init)['q'][-1]
-
-#             if eq != 'NA':
-#                 # print("getting stability")
-#                 # print(s, h, eq)
-#                 slope = get_ngd_stability(s, h, eq, dfunc)
-
-#                 if eq >= 1 or math.isclose(eq, 1.0):
-#                     allres['Fixation'].append(((s, h), 1.0))
-#                 elif eq <= 0 or math.isclose(eq, 0.0):
-#                     allres['Loss'].append(((s, h), 0.0))
-#                 else:
-#                     if slope != 'NA':
-#                         if abs(slope) < 1:
-#                             allres['Stable'].append(((s, h), eq, slope))
-#                         elif abs(slope) > 1:
-#                             allres['Unstable'].append(((s, h), eq, slope))
-#                         elif math.isclose(slope, 1.0):
-#                             allres['dq=1'].append(((s, h), eq))
-#             else:
-#                 print('NO EQ:', s, h)
-#                 res = wm(s, h, 40000, q_init)
-#                 res_state = res['state'] 
-#                 if res_state == 'loss':
-#                     allres['Loss'].append(((s, h), 0.0))
-#                 elif res_state == 'fix':
-#                     allres['Fixation'].append(((s, h), 1.0))
-#                 else:
-#                     print(f"Skipping invalid config s={s}, h={h}, final={res['q'][-1]}")
-
-#     with open(f"stability_res/NGD_partition_sim_q{q_init}.txt", "w") as out:
-#         for state in allres:
-#             if state != "Stable" and state != "Unstable":
-#                 for config, eq in allres[state]:
-#                     out.write(f"{state}: s={config[0]:.3f}, h={config[1]:.3f}, eq={eq:.4f}\n")
-#             else:
-#                 for config, eq, slope in allres[state]:
-#                     out.write(f"{state}: s={config[0]:.3f}, h={config[1]:.3f}, eq={eq:.4f}, slope = {slope:.5f}\n")
-#     return allres
-
-
-# def plot_all_ngd(allres, q_init):
-#     fig, ax = plt.subplots()
-#     # state = 'Unstable'
-#     for state in allres.keys():
-#         unstable_configurations = allres[state]
-#         s_values = [config[0][0] for config in unstable_configurations]
-#         h_values = [config[0][1] for config in unstable_configurations]
-#         eq_values = [max(0, min(1, config[1])) for config in unstable_configurations]
-
-#         if eq_values:
-#             norm = mcolors.Normalize(0.0, 1.0)
-#             cmap = plt.cm.get_cmap('viridis')
-#             ax.scatter(s_values, h_values, c=eq_values, cmap=cmap, s=50, norm=norm)
-
-#     cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
-#     cbar.set_label('Allele Frequency at Eq')
-
-#     ax.set_xlabel('Selection Coefficient (s)', fontsize=12)
-#     ax.set_ylabel('Dominance (h)', fontsize=12)
-#     ax.set_title(f"NGD Final Phase Partition (q_init={q_init})", fontsize=14)
-#     ax.set_aspect('equal')
-#     plt.grid(True)
-#     plt.savefig(f"plot_partition/NGD_partition_sim_q{q_init}.jpg", dpi=600)
-#     plt.close()
-
 
 def main():
     s=0.6
     c=0.6
-    h=0.8
+    h=0.7
     q_init=0.001
     regime = 'Fixation'
     params = {'config':(s, c, h), 'q0':q_init, 'conversion': "gametic"}
@@ -531,8 +484,8 @@ def main():
     ##########################################################
     # OLD VERSION OF PLOTTING GD PARTITION
     # run through all configurations
-    # allres = runall(params)
-    # save_pickle(filename, allres) ### change file name
+    allres = runall(params)
+    save_pickle(filename, allres) ### change file name
     
     allres = load_pickle(filename)
 
@@ -543,24 +496,9 @@ def main():
         if state == regime:  ### change state check
             for config, eq_val in allres[state]:
                 f_out.write(f"(s, c, h) = {config}\t\teq = {eq_val}\n")
-    plot_regions(allres, regime, params['conversion'])
+    # plot_regions(allres, regime, params['conversion'])
     #
-    # plot_all(allres, params)
-    # dfunc = compute_lambda()
-    # params = {'config': (0.5,0.3,0.3), 'q0': 0.001, 'conversion': 'gametic'}
-    # eq = get_eq(params)['q3']
-    # h_ngd = eq/(2*eq-1)
-    # for s_ngd in np.arange(-2, 0, 0.1):
-    #     ngd_eq = wm(s_ngd, h_ngd, 40000, 0.001)['q'][-1]
-    #     ngd_stat = get_ngd_stability(s_ngd, h_ngd, eq, dfunc)
-    #     print("######### GD EQ:", eq)
-    #     print("========= NGD EQ:", ngd_eq)
-    #     print("++++++++++++++++++++++")
-    #     print(f"s_ngd = {s_ngd}, dq = {ngd_stat}")
-    #     print("----------------------")
-    #     ngd_stat_old = get_ngd_stability_old(s_ngd, h_ngd, eq)
-    #     print(f"s_ngd = {s_ngd}, dq_old = {ngd_stat_old}")
-    ##########################################################
+    plot_all_by_regime(allres, params)
     
 
     ### PLOT NGD PARTITION
@@ -573,18 +511,6 @@ def main():
     # df_stability.to_csv("stability_res/NGD_stability_partition.csv", index=False)
     df_stab = pd.read_csv("stability_res/NGD_stability_partition.csv")
     # plot_ngd_partition(df_stab)
-    
-    ##########################################################
-    # OLD VERSION OF PLOTTING NGD PARTITION
-    # plot_ngd_partition(df_stab, q_init=0.001)
-
-    # allres_ngd = runall_ngd(q_init)
-    # save_pickle(file, allres_ngd)
-
-    # allres_ngd = load_pickle(file)
-
-    # plot_all_ngd(allres_ngd, q_init)
-    ##########################################################
 
 
 

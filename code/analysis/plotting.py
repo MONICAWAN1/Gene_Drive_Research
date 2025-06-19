@@ -22,15 +22,16 @@ def loadGrad():
 colormaps = ['Greys', 'Reds', 'YlOrBr', 'Oranges', 'PuRd', 'BuPu',
                       'GnBu', 'YlGnBu', 'PuBuGn', 'Greens']
 
-diffmap5 = load_pickle("h0.0_mappingdiff_hap_grid.pickle")
-diffmap6 = load_pickle("h0.0_mappingdiff_gdhapse01.pickle")
+diffmap5 = load_pickle("mapping_diff/h0.0_mappingdiff_hap_grid.pickle")
+diffmap6 = load_pickle("mapping_diff/h0.0_mappingdiff_gdhapse01.pickle")
 # print(diffmap1, '\n', diffmap2)
 
 # BuPu Color Scale
 all_values = list(diffmap5.values()) + list(diffmap6.values()) + [0.011150530195789305]
 min_val = min(all_values)
 max_val = max(all_values)
-print(min_val, max_val)
+# print(min_val, max_val)
+allmax = 0.1
 
 '''
 Plot error vs h for a specific configuration
@@ -42,8 +43,8 @@ def plot_errorh(h):
     c = 0.9
     h_range = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.8]
     for h in h_range:
-        hapseDiff = load_pickle(f"h{h}_mappingdiff_gdhapse001.pickle")
-        hapgridDiff = load_pickle(f"h{h}_mappingdiff_hap_grid.pickle")
+        hapseDiff = load_pickle(f"mapping_diff/h{h}_mappingdiff_gdhapse001.pickle")
+        hapgridDiff = load_pickle(f"mapping_diff/h{h}_mappingdiff_hap_grid.pickle")
         # print(list(hapseDiff.keys()))
         hapse_errors.append(hapseDiff[(s, c, h)])
         hapgrid_errors.append(hapgridDiff[(s, c, h)])
@@ -193,6 +194,7 @@ def derivative_plot(params, gd_configs, fitting_res):
 def getHapseMapDiff(currH):
     '''
     Given current h value, plot an Error heatmap for haploid_se vs GD
+    Store results as .txt under analysis/mapping_diff_txt/ and as .pickle under mapping_diff/
     '''
     loadFile = f"gd_simulation_results/h{currH}_allgdres001G.pickle" #decides the density of the dots
     gd_results = load_pickle(loadFile)
@@ -201,8 +203,8 @@ def getHapseMapDiff(currH):
 
     # Name output files (txt + pickle)
     is001 = "001" if '001' in loadFile else '01'
-    outTXTFile = f"h{currH}_mappingdiff_gdhapse{is001}_fix.txt"
-    savedPickle = f"h{currH}_mappingdiff_gdhapse{is001}_fix.pickle"
+    outTXTFile = f"mapping_diff_txt/h{currH}_mappingdiff_gdhapse{is001}_fix.txt"
+    savedPickle = f"mapping_diff/h{currH}_mappingdiff_gdhapse{is001}_fix.pickle"
 
     gds = [res['q'] for res in gd_res.values()]
 
@@ -221,6 +223,7 @@ def getHapseMapDiff(currH):
         gd_curve = gd_res[(s,c,h)]['q']
 
         # plot haploid using Se
+        se = h*s-c+c*h*s
         paramSe = {'s':s, 'c':c, 'n': 500, 'h':h, 'target_steps': 40000, 'q0': 0.001}
         hapSe = haploid_se(paramSe)['q']
 
@@ -248,10 +251,12 @@ def plotMapDiff(currH):
     '''
     Given current h value, plot an Error heatmap for haploid_se vs GD
     '''
+    plt.rcParams['pdf.fonttype'] = 42  # Ensure text remains text
+    plt.rcParams['ps.fonttype'] = 42
     gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
     gd_configs, gd_res = gd_results[0], gd_results[1]
     stabilityRes = load_pickle(f"h{currH}_gametic_stability_res.pickle")
-    diffmapfile = f"h{currH}_mappingdiff_gdhapse001_fix.pickle"
+    diffmapfile = f"mapping_diff/h{currH}_mappingdiff_gdhapse001_fix.pickle"
     hapseDiffMap = load_pickle(diffmapfile)
 
     valid_configs = []
@@ -280,13 +285,23 @@ def plotMapDiff(currH):
         diff_map[row_idx, col_idx] = hapseDiffMap[(s,c,h)]
 
     X, Y = np.meshgrid(all_c, all_s)
-    cmap = plt.get_cmap('BuPu')
+    import matplotlib.colors as mcolors
+
+    def truncate_colormap(cmap, minval=0.1, maxval=0.7, n=256):
+        new_colors = cmap(np.linspace(minval, maxval, n))
+        new_cmap = mcolors.LinearSegmentedColormap.from_list(
+            f'truncated({cmap.name},{minval:.2f},{maxval:.2f})', new_colors)
+        return new_cmap
+
+    base_cmap = plt.get_cmap('Reds')
+    cmap = truncate_colormap(base_cmap, 0.1, 0.7)
     cmap.set_bad('white')
 
     # Define min and max values for color normalization
     vmin, vmax = min_val, max_val
     vmin2, vmax2 = np.nanmin(diff_map), np.nanmax(diff_map)
     print(vmin2, vmax2)
+    vmax2 = allmax
     norm = mcolors.Normalize(vmin=vmin2, vmax=vmax2)
 
     plt.figure(figsize=(9, 7))
@@ -296,8 +311,8 @@ def plotMapDiff(currH):
         cmap=cmap,
         origin='lower',
         extent=[0, 1, 0, 1],  # fixes axes to 0–1
-        vmin=min_val,
-        vmax=max_val
+        vmin=vmin2,
+        vmax=vmax2
     )
 
     plt.colorbar(label='Mean Squared Error (Error of mapping)')
@@ -309,6 +324,7 @@ def plotMapDiff(currH):
     plt.xlabel('c in gene drive', fontsize=15)
     plt.ylabel('s in gene drive', fontsize=15)
     plt.title(f'Difference Heatmap: GD vs. Haploid Se at h = {currH}')
+    plt.savefig(f"mapping_diff_figures/h{currH}_mappingdiff_gdhapse001_fix_001max.pdf", format="pdf", dpi=600, bbox_inches='tight')
     plt.show()
 
 
@@ -381,42 +397,51 @@ Need to change the loaded files according to plotted curves
 '''
 def plot_mapping(currH):
     # loading results
+    diploid = False
+    gradient = False
+    plt.rcParams['pdf.fonttype'] = 42  # Ensure text remains text
+    plt.rcParams['ps.fonttype'] = 42
+    mapfunction = 'grid' if diploid else 'hap_grid'
+    if gradient: 
+        gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
+        sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
+    
+    if not gradient: 
+        if diploid: 
+            gridres_filename = f"mapping_result/h{currH}_grid_fix001_G.pickle"
+            gridResult_diploid = load_pickle(gridres_filename) # all hap grid results
+            sMap_grid_diploid, wms_grid_diploid = gridResult_diploid['map'], gridResult_diploid['ngC']
+        else: 
+            gridResult = load_pickle(f"mapping_result/h{currH}_hap_grid001_G_fix.pickle")
+            sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
     gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
-    # gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
-    gridres_filename = f"h{currH}_grid_fix001_G.pickle"
-    gridResult_diploid = load_pickle(gridres_filename) # all hap grid results
-    # gridResult = load_pickle(f"h{currH}_hap_grid_G_fix.pickle")
 
     gd_configs, gd_res = gd_results[0], gd_results[1]
 
-    # sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
-    sMap_grid_diploid, wms_grid_diploid = gridResult_diploid['map'], gridResult_diploid['ngC']
-    # sMap_grid_diploid, wms_grid_diploid = gridResult_diploid['config'], gridResult_diploid['traj']
-    # sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
 
     plt.figure(figsize = (8, 6))
-    ts = 0.6
-    tc = 0.56
+    ts = 0.5
+    tc = 0.7
 
     for (s, c, h) in gd_configs:
         if (math.isclose(s, ts) and math.isclose(c, tc)):
         # if s < c and math.isclose(s, 0.1):
-            # plot grid (hap/diploid?)
-            solved_params, solved_curve = get_solved_curve(s, c, h, currH)
-            solved_s, solved_h = solved_params 
-            plt.plot(solved_curve, color = '#d16817', marker = 's', markersize = '2', label = f'solved curve ngd_s={solved_s:.4f}, ngd_h={solved_h:.4f}')
+            ### PLOT SOLVED DIPLOID NGD
+            # solved_params, solved_curve = get_solved_curve(s, c, h, currH)
+            # solved_s, solved_h = solved_params 
+            # plt.plot(solved_curve, color = '#d16817', marker = 's', markersize = '2', label = f'solved curve ngd_s={solved_s:.4f}, ngd_h={solved_h:.4f}')
 
             # haploid trajectory
-            # if (s, c, h) in sMap_grid and type(sMap_grid[(s,c,h)]) != tuple:
-            #     best_s_grid = sMap_grid[(s, c, h)]
-            #     i = list(sMap_grid.keys()).index((s, c, h))
-            #     wm_curve_grid = wms_grid[i]
-            #     time0 = np.arange(0, len(wm_curve_grid))
-            #     w_color1 = 'y'
-            #     plt.plot(time0, wm_curve_grid, marker = 'o', color = w_color1, markersize=3, linestyle = '-', label = f'grid search haploid NGD (s = {best_s_grid})')
+            if not diploid and (s, c, h) in sMap_grid and type(sMap_grid[(s,c,h)]) != tuple:
+                best_s_grid = sMap_grid[(s, c, h)]
+                i = list(sMap_grid.keys()).index((s, c, h))
+                wm_curve_grid = wms_grid[i]
+                time0 = np.arange(0, len(wm_curve_grid))
+                w_color1 = 'y'
+                plt.plot(time0, wm_curve_grid, marker = 'o', color = w_color1, markersize=3, linestyle = '-', label = f'grid search haploid NGD (s = {best_s_grid})')
             
             # diploid trajectory
-            if (s, c, h) in sMap_grid_diploid:
+            if diploid and (s, c, h) in sMap_grid_diploid:
                 # print("TRUEE")
                 if "unstable" not in gridres_filename:
                     best_s_grid, best_h_grid = sMap_grid_diploid[(s, c, h)][0], sMap_grid_diploid[(s, c, h)][1]
@@ -432,26 +457,32 @@ def plot_mapping(currH):
                 plt.plot(time1, wm_curve_grid, marker = 'o', color = w_color0, markersize=2, linestyle = '-', label = f'grid search diploid NGD (s = {best_s_grid:.3f}, h = {best_h_grid:.3f})')
 
             # PLOT GRADIENT (HAP/DIPLOID)
-            # cmap2 = plt.get_cmap('GnBu') # grid mapping curves
-            # w_color2 = cmap2(abs(best_s_grad))
-            # w_color2 = "b"
-            # if (s, c, h) in sMap_grad and type(sMap_grad[(s,c,h)]) != tuple:
-            #     best_s_grad = sMap_grad[(s, c, h)]
-            #     paramHap = {'s':best_s_grad, 'n': 500, 'target_steps': 40000, 'q0': 0.001}
-            #     wm_curve_hap_grad = haploid(paramHap)['q']
-            #     time4 = np.arange(0, len(wm_curve_hap_grad))
-            #     plt.plot(time4, wm_curve_hap_grad, marker = 's', color = w_color2, markersize=3, linestyle = '-', label = f'gradient descent haploid NGD s = {best_s_grad}')
-            # # best_h_grid = sMap_grid[(s, c, h)][1]
-            # else:
-            #     best_s_grad, best_h_grad = sMap_grad[(s, c, h)][0], sMap_grad[(s, c, h)][1]
-            #     print("BEFORE", best_s_grad, best_h_grad)
-            #     # best_s_grad, best_h_grad = -1.33, 1
-            #     wm_curve_grad = wm(best_s_grad, best_h_grad, 40000, 0.001)['q']
-            #     time2 = np.arange(0, len(wm_curve_grad))
-            #     error = euclidean(gd_res[(s, c, h)]['q'], wm_curve_grad)
-            #     print('ERROR', error)
-            #     plt.plot(time2, wm_curve_grad, marker = 's', color = w_color2, markersize=3, linestyle = '-', label = f'gradient descent diploid NGD s = {best_s_grad}, h = {best_h_grad}')
-            # print(best_s_grad)
+            if gradient:
+                print("Plotting gradient descent curves")
+                cmap2 = plt.get_cmap('GnBu') # grid mapping curves
+                w_color2 = cmap2(abs(best_s_grad))
+                w_color2 = "b"
+                if not diploid: 
+                    if(s, c, h) in sMap_grad and type(sMap_grad[(s,c,h)]) != tuple:
+                        best_s_grad = sMap_grad[(s, c, h)]
+                        paramHap = {'s':best_s_grad, 'n': 500, 'target_steps': 40000, 'q0': 0.001}
+                        wm_curve_hap_grad = haploid(paramHap)['q']
+                        time4 = np.arange(0, len(wm_curve_hap_grad))
+                        plt.plot(time4, wm_curve_hap_grad, marker = 's', color = w_color2, markersize=3, linestyle = '-', label = f'gradient descent haploid NGD s = {best_s_grad}')
+                        # best_h_grid = sMap_grid[(s, c, h)][1]
+                elif diploid:
+                    best_s_grad, best_h_grad = sMap_grad[(s, c, h)][0], sMap_grad[(s, c, h)][1]
+                    print("BEFORE", best_s_grad, best_h_grad)
+                    # best_s_grad, best_h_grad = -1.33, 1
+                    wm_curve_grad = wm(best_s_grad, best_h_grad, 40000, 0.001)['q']
+                    time2 = np.arange(0, len(wm_curve_grad))
+                    error = euclidean(gd_res[(s, c, h)]['q'], wm_curve_grad)
+                    print('ERROR', error)
+                    plt.plot(time2, wm_curve_grad, marker = 's', color = w_color2, markersize=3, linestyle = '-', label = f'gradient descent diploid NGD s = {best_s_grad}, h = {best_h_grad}')
+                print(best_s_grad, best_h_grad)
+            
+            # print("AFTER", best_s_grad, best_h_grad)
+            # print("best_s_grad", best_s_grad, "best_h_grad", best_h_grad) 
 
             # PLOT GD CURVE
             cmap = plt.get_cmap("Reds")
@@ -460,9 +491,9 @@ def plot_mapping(currH):
             # PLOT HAPSE
             paramSe = {'s':s, 'c':c, 'n': 500, 'h': h, 'target_steps': 40000, 'q0': 0.001}
             se = h*s-c+c*h*s
-            # hapSe = haploid_se(paramSe)['q']
-            # cmapSe = plt.get_cmap("Oranges")
-            # se_color = cmapSe(0.75) # original gene-drive curve
+            hapSe = haploid_se(paramSe)['q']
+            cmapSe = plt.get_cmap("Oranges")
+            se_color = cmapSe(0.75) # original gene-drive curve
 
             # nearby = []
             # for hnew in np.arange(best_h_grid-0.2, best_h_grid+0.3, 0.1):
@@ -473,12 +504,12 @@ def plot_mapping(currH):
             #     plt.plot(time, newc, marker = 'o', color = h_color, markersize=3, linestyle = '-', label = f"NGD s = {'%.3f' % best_s_grid}, h = {'%.3f' % hnew}")      
 
             time = np.arange(0, len(gd_res[(s, c, h)]['q']))
-            # time_se = np.arange(0, len(hapSe))
+            time_se = np.arange(0, len(hapSe))
             time3 = np.arange(0, len(gd_res[(s, c, h)]['q'])-1)
-            print("plotting gd and mapped curves")
 
+            print("plotting gd and hapse curves")
             plt.plot(time, gd_res[(s, c, h)]['q'], color = gd_color, label = f"s = {s}, c = {c}, h = {h}")
-            # plt.plot(time_se, hapSe, marker = 'o', color = se_color, markersize=3, label = f"haploid using Se (s = {'%.3f'%se})")
+            plt.plot(time_se, hapSe, marker = 'o', color = se_color, markersize=3, label = f"haploid using Se (s = {'%.3f'%se})")
             # plt.plot(time3, gd_res[(s, c, h)]['w_bar'], color = 'b', label = f"wbar for s = {s}, c = {c}, h = {h}")
 
 
@@ -495,26 +526,33 @@ def plot_mapping(currH):
     plt.xlabel('Time', fontsize=12)
     plt.title(f"Comparison of gene drive and different mapping results at h = {currH}")
     # plt.tight_layout(rect=[0, 0, 0.7, 1])
-    plt.grid(True)
+    plt.grid(False)
     # legend = plt.legend(title='population condition', loc='upper left', bbox_to_anchor=(0,1))
     legend = plt.legend(title='population condition', loc='lower right', bbox_to_anchor=(1, 0))
     export_legend(legend)
-    print("showing")
+    plt.savefig(f"trajectory_plot/h{currH}_{mapfunction}_s{ts}_c{tc}.pdf", format="pdf", dpi=600, bbox_inches='tight')
     plt.show()
-    plt.savefig(f"trajectory_plot/h{currH}_grid_solved_s{ts}_c{tc}.jpg", dpi=600)
 
 
 
 def ploterror(currH):
     '''
-    Read the mapping difference file and plot the error heatmap'''
-    diffmapfile = f"unstable_mapping_results/h{currH}_mappingdiff_grid_unstable.pickle"
+    Read the mapping difference file and plot the error heatmap
+    '''
+    mapping_function = 'grid'  # or 'grid'
+    state = "fixation"  # or 'unstable'
+    if state == 'unstable':
+        diffmapfile = f"unstable_mapping_results/h{currH}_mappingdiff_grid_unstable.pickle"
+        figure_file = f"unstable_mapping_v2/h{currH}_maperror_unstable.pdf"
+    elif state == "fixation":
+        diffmapfile = f"mapping_diff/h{currH}_mappingdiff_{mapping_function}_fix001.pickle"
+        figure_file = f"mapping_diff_figures/h{currH}_mappingdiff_{mapping_function}_fix001.pdf"
     diffmap = load_pickle(diffmapfile)
     # stability = load_pickle(f"h{currH}_gametic_stability_res.pickle")
 
     ngd_s = sorted(set([conf[0] for conf in diffmap.keys()]))
     ngd_c = sorted(set([conf[1] for conf in diffmap.keys()]))
-    print(ngd_s, ngd_c)
+    # print(ngd_s, ngd_c)
 
     if '001' in diffmapfile:
         step = 0.01
@@ -527,40 +565,45 @@ def ploterror(currH):
     for (s, c, h), error in diffmap.items():
         i = ngd_s.index(s)  # row (y-axis)
         j = ngd_c.index(c)  # column (x-axis)
-        errors[i, j] = error[2]
+        errors[i, j] = error
 
     cmin, cmax = np.nanmin(errors), np.nanmax(errors)
     print(cmin, cmax)
-    cmax = 0.4
+    cmax = allmax
+    import matplotlib.colors as mcolors
+
+    def truncate_colormap(cmap, minval=0.5, maxval=1.0, n=256):
+        new_colors = cmap(np.linspace(minval, maxval, n))
+        new_cmap = mcolors.LinearSegmentedColormap.from_list(
+            f'truncated({cmap.name},{minval:.2f},{maxval:.2f})', new_colors)
+        return new_cmap
+
+    base_cmap = plt.get_cmap('Reds')
+    cmap = truncate_colormap(base_cmap, 0.1, 0.7)
 
     plt.figure(figsize=(9, 7))
     plt.imshow(
         errors,
         aspect='auto',
-        cmap='BuPu',
+        cmap=cmap,
         origin='lower',
+        extent=[0, 1, 0, 1], 
         vmin=cmin,
         vmax=cmax
     )
 
     plt.colorbar(label='Mean Squared Error (Error of mapping)')
 
-    # Explicitly set ticks and labels
-    plt.xticks(
-        ticks=np.linspace(0, len(ngd_c)-1, len(ngd_c)),
-        labels=[f"{val:.2f}" for val in ngd_c]
-    )
-    plt.yticks(
-        ticks=np.linspace(0, len(ngd_s)-1, len(ngd_s)),
-        labels=[f"{val:.2f}" for val in ngd_s]
-    )
+    # Set ticks at intervals of 0.1 and label them with the actual values of s and c
+    tick_vals = np.round(np.arange(0, 1.01, 0.1), 2)
+    plt.xticks(tick_vals)
+    plt.yticks(tick_vals)
 
     plt.xlabel('c in gene drive', fontsize=15)
     plt.ylabel('s in gene drive', fontsize=15)
-    plt.title(f"Mapping Error from GD to NGD at h = {currH} with Grid Search for Unstable Regime")
+    plt.title(f"Mapping Error from GD to NGD at h = {currH} with {mapping_function} for {state} Regime")
+    plt.savefig(figure_file, dpi=600, format="pdf", bbox_inches='tight')
     plt.show()
-    plt.savefig(f"unstable_mapping_v2/h{currH}_maperror_unstable.jpg", dpi=600)
-
 
 def gd_to_ngd_diff(currH):
     gd_s = 0.2
@@ -854,9 +897,22 @@ def plot_qmaps(currH):
 '''
 Plot mapping results from fixation mapping
 Fix h, s, and c on x-axis, plot s_ngd vs c and h_ngd vs c
+PARAM_V: fixed for each curve, but varied for different curves
+Fixed_vars: PARAM_V + another fixed parameter
+x_param: the varied parameter on x-axis
+NGD_p: y-axis label
 '''
 def plot_fixation_res(currH):
-    fixed_vars = {1, 2}
+    hv = currH
+    plt.rcParams['pdf.fonttype'] = 42  # Ensure text remains text
+    plt.rcParams['ps.fonttype'] = 42
+    gdFile = "001"
+    slope_flag = False
+    se_flag = True
+    regression_flag = False
+    diploid = True
+    hap = "diploid" if diploid else "haploid"
+    fixed_vars = {1,2}
     PARAM_V = 1
     PARAM0 = sorted(fixed_vars)[0]
     PARAM1 = sorted(fixed_vars)[1]
@@ -869,29 +925,35 @@ def plot_fixation_res(currH):
     color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
     # for different C_GD
-    for currH in [0.0, 0.5, 0.8]:
+    for currH in [hv]:
         print("currH", currH)
         var_vals = []
         coeffs = [] # all (slope, intercept) for different PARAM_V
         records = [] # all (c, s, s_ngd) for different PARAM_V
-        for idx, var in enumerate(np.arange(0.1, 1.0, 0.1)):
+        se_records = [] # all (c, s, se) for different PARAM_V
+        for idx, var in enumerate(np.arange(0.1, 1.0, 0.2)):
         
             # get grid mapp results 
-            gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdresG.pickle")
+            gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres{gdFile}G.pickle")
             # gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
-            gridResult_diploid = load_pickle(f"h{currH}_grid_G_fix.pickle") # all diploid grid results
-            # gridResult = load_pickle(f"h{currH}_hap_grid_G_fix.pickle")
+            if diploid: 
+                gridResult_diploid = load_pickle(f"mapping_result/h{currH}_grid_fix001_G.pickle") # all diploid grid results
+                sMap_grid_diploid, wms_grid_diploid = gridResult_diploid['map'], gridResult_diploid['ngC']
+            else:
+                gridResult = load_pickle(f"mapping_result/h{currH}_hap_grid001_G_fix.pickle")
+                sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
 
             gd_configs, gd_res = gd_results[0], gd_results[1]
 
             # sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
-            sMap_grid_diploid, wms_grid_diploid = gridResult_diploid['map'], gridResult_diploid['ngC']
             # print(sMap_grid)
             # sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
 
             # Store c, s_ngd, h_ngd values
             x_vals = []
             s_ngd_vals = []
+            se_vals = []
+            he_vals = []
             h_ngd_vals = []
             stability = load_pickle(f"h{currH}_gametic_stability_res.pickle")
 
@@ -899,7 +961,7 @@ def plot_fixation_res(currH):
                 s_gd, c_gd, h_gd = config
                 pl = [s_gd, c_gd, h_gd]
 
-                if math.isclose(pl[PARAM1], float(currH)) and math.isclose(pl[PARAM_V], var): # check if h and c are correct
+                if i%5 == 0 and math.isclose(pl[PARAM1], float(currH)) and math.isclose(pl[PARAM_V], var): # check if h and c are correct
                     if (tuple(pl), 1.0) in stability['Fixation']:
                         # print(s_gd, c_gd, h_gd)
                         # print("find fixation with required parameters")
@@ -912,16 +974,30 @@ def plot_fixation_res(currH):
                             # mapped selection and dominance values from grid
                             mapped_params = sMap_grid_diploid[(s_gd, c_gd, h_gd)] 
                             # print(mapped_params)
-                            s_ngd, h_ngd = mapped_params[0], mapped_params[1]
-                            s_ngd_vals.append(s_ngd)
-                            h_ngd_vals.append(h_ngd)
-                            records.append((c_gd, s_gd, s_ngd))
+                            if diploid: 
+                                s_ngd, h_ngd = mapped_params[0], mapped_params[1]
+                                s_ngd_vals.append(s_ngd)
+                                h_ngd_vals.append(h_ngd)
+                                se = solve_sngd(s_gd, c_gd, h_gd)[0]
+                                he = solve_sngd(s_gd, c_gd, h_gd)[1]
+                                se_vals.append(se)
+                                he_vals.append(he)
+                                records.append((c_gd, s_gd, s_ngd))
+                            else:
+                                s_ngd = mapped_params
+                                s_ngd_vals.append(s_ngd)
+                                se = s_gd * h_gd - c_gd + c_gd * s_gd * h_gd
+                                se_vals.append(se)
+                                records.append((c_gd, s_gd, s_ngd))
+                                se_records.append((c_gd, s_gd, se))
 
             # Sort by c for cleaner plotting
             sorted_indices = np.argsort(x_vals)
             x_vals = np.array(x_vals)[sorted_indices]
             s_ngd_vals = np.array(s_ngd_vals)[sorted_indices]
-            h_ngd_vals = np.array(h_ngd_vals)[sorted_indices]
+            se_vals = np.array(se_vals)[sorted_indices] if se_flag else None
+            if diploid: 
+                h_ngd_vals = np.array(h_ngd_vals)[sorted_indices]
             # 2)  load records into a NumPy array and sort by c_GD once
             arr = np.asarray(records)                  
             c_vals  = np.unique(arr[:,0])
@@ -931,63 +1007,142 @@ def plot_fixation_res(currH):
             color = color_cycle[idx % len(color_cycle)]
 
             # Fit a linear regression line: y = mx + b
-            if x_param == 0 and 'S' in NGD_p:
-                plt.scatter(x_vals, s_ngd_vals, color=color, alpha=0.6)
-                if len(x_vals) >= 2:  # only fit if enough points
-                    slope, intercept = np.polyfit(x_vals, s_ngd_vals, 1)
-                    coeffs.append([slope, intercept])
-                    var_vals.append(var)
-                    x_fit = np.linspace(min(x_vals), max(x_vals), 100)
-                    y_fit = slope * x_fit + intercept
-                    plt.plot(x_fit, y_fit, linestyle='--', color=color, label=f"${param_strings[PARAM_V]}$ = {var:.3f}, slope = {slope:.2f}")
+            if 'S' in NGD_p:
+                plt.plot(x_vals, s_ngd_vals, color=color, alpha=0.8, marker='o', label=f"${param_strings[PARAM_V]}$ = {var:.3f} ({hap} grid)", ls='--')
+                plt.plot(x_vals, se_vals, color=color, alpha=0.8, marker='x', label=f"${param_strings[PARAM_V]}$ = {var:.3f} (Se)", ls='-')
+                # if len(x_vals) >= 2:  # only fit if enough points
+                #     slope, intercept = np.polyfit(x_vals, s_ngd_vals, 1)
+                #     coeffs.append([slope, intercept])
+                #     var_vals.append(var)
+                #     x_fit = np.linspace(min(x_vals), max(x_vals), 100)
+                #     y_fit = slope * x_fit + intercept
+                #     plt.plot(x_fit, y_fit, linestyle='--', color=color, label=f"${param_strings[PARAM_V]}$ = {var:.3f}, slope = {slope:.2f}")
+                    # slope2, intercept2 = np.polyfit(x_vals, se_vals, 1)
+                    # x_fit = np.linspace(min(x_vals), max(x_vals), 100)
+                    # y_fit2 = slope2 * x_fit + intercept2
+                    # plt.plot(x_fit, y_fit2, linestyle='-', color=color, label=f"${param_strings[PARAM_V]}$ = {var:.3f}, slope = {slope:.2f}")
             else: 
                 y_vals = h_ngd_vals if 'H' in NGD_p else s_ngd_vals
-                plt.plot(x_vals, y_vals, label=f"{param_strings[PARAM_V]} = {var:.3f}", marker='o')
+                plt.plot(x_vals, y_vals, color=color, marker='o', label=f"${param_strings[PARAM_V]}$ = {var:.3f}",  ls='--')
+                plt.plot(x_vals, he_vals, color=color, alpha=0.8, marker='x', label=f"${param_strings[PARAM_V]}$ = {var:.3f} (He)", ls='-')
         # plt.plot(x_vals, h_ngd_vals, label=r'$h_{NGD}$', marker='s')
 
         plt.xlabel(f'${param_strings[x_param]}$ in Gene Drive model', fontsize=14)
         plt.ylabel(f'Mapped {NGD_p}', fontsize=14)
         plt.title(f"Mapped {NGD_p} vs. ${param_strings[x_param]}$ for different ${param_strings[PARAM_V]}$ at ${param_strings[PARAM1]}$ = {currH}", fontsize=16)
-        plt.legend()
-        plt.grid(True)
+        if PARAM_V == 0 and NGD_p == r"$S_{NGD}$":
+            loc = "lower left"
+        elif PARAM_V == 1 and NGD_p == r"$S_{NGD}$":
+            loc = "lower right"
+        elif PARAM_V == 1 and NGD_p == r"$H_{NGD}$":
+            loc = "upper right"
+        else:
+            loc = "upper right"
+        plt.legend(loc=loc, ncols=2)
+        plt.grid(False)
         plt.tight_layout()
+        plt.savefig(f"plots_fixation/{hap}_{param_strings[x_param]}_{NGD_p}_var{param_strings[PARAM_V]}_h{currH}{gdFile}.pdf", format="pdf", bbox_inches='tight', dpi=600)
         plt.show()
-        plt.savefig(f"plots_fixation/fixation_var${param_strings[PARAM_V]}$_x${param_strings[x_param]}$_y{NGD_p}_h{currH}.jpg", dpi=600)
         plt.close()
 
-        # plt.figure(figsize=(8, 7))
-        ### Plotting slopes and intercepts
-        slopes = [ce[0] for ce in coeffs]
-        intercepts = [ce[1] for ce in coeffs]
-        print("c_vals:", var_vals, "slopes", slopes, "intercepts", intercepts)
-        # plt.plot(var_vals, slopes, label=f"${param_strings[2]}$ = {currH:.2f}", marker = 'o')
-        # plt.plot(var_vals, intercepts, label=f"${param_strings[2]}$ = {currH:.2f}", marker = 'x')
-    # plt.xlabel(f'${param_strings[1]}$ in Gene Drive model', fontsize=14)
-    # plt.ylabel(f'Slopes of Mapped {NGD_p} over ${param_strings[0]}$', fontsize=14)
-    # plt.title(f"{NGD_p} Slopes vs. ${param_strings[1]}$ over differnt ${param_strings[2]}$", fontsize=16)
-    # plt.legend()
-    # plt.grid(True)
-    # plt.tight_layout()
-    # plt.savefig(f"plots_fixation/slope_varH_xC_y{NGD_p}_h{currH}.jpg", dpi=600)
-    # plt.close()
+        if slope_flag:
+            plt.figure(figsize=(8, 7))
+            ### Plotting slopes and intercepts
+            slopes = [ce[0] for ce in coeffs]
+            intercepts = [ce[1] for ce in coeffs]
+            print("c_vals:", var_vals, "slopes", slopes, "intercepts", intercepts)
+            plt.plot(var_vals, slopes, label=f"${param_strings[2]}$ = {currH:.2f}", marker = 'o')
+            plt.plot(var_vals, intercepts, label=f"${param_strings[2]}$ = {currH:.2f}", marker = 'x')
+            plt.xlabel(f'${param_strings[1]}$ in Gene Drive model', fontsize=14)
+            plt.ylabel(f'Slopes of Mapped {NGD_p} over ${param_strings[0]}$', fontsize=14)
+            plt.title(f"{NGD_p} Slopes vs. ${param_strings[1]}$ over differnt ${param_strings[2]}$", fontsize=16)
+            plt.legend()
+            plt.grid(False)
+            plt.tight_layout()
+            plt.savefig(f"plots_fixation/slope_varH_xC_y{NGD_p}_h{currH}.jpg", dpi=600)
+            plt.close()
+        
+        if regression_flag:
+            # calculate coefficients a and b for a*s_gd + b
+            df = pd.DataFrame(records, columns=['c','S_GD','S_NGD'])
+            # 1) precompute polynomial columns
+            df['c2'] = df['c']**2
+            # df['c3'] = df['c']**3
 
-    # calculate coefficients a and b for a*s_gd + b
-        df = pd.DataFrame(records, columns=['c','S_GD','S_NGD'])
-        # 1) precompute polynomial columns
-        df['c2'] = df['c']**2
-        # df['c3'] = df['c']**3
+            # 2) fit with S_GD interactions on each power of c
+            formula = '''
+            S_NGD ~ 
+                S_GD 
+            + c + c2
+            + S_GD:c + S_GD:c2
+            '''
+            res = smf.ols(formula, data=df).fit()
+            print(res.summary())
+            print(res.params)
+            save_pickle(f"regression/h{currH}_mapping_coeffs_sq.pickle", res.params)
 
-        # 2) fit with S_GD interactions on each power of c
-        formula = '''
-        S_NGD ~ 
-            S_GD 
-        + c + c2
-        + S_GD:c + S_GD:c2
-        '''
-        res = smf.ols(formula, data=df).fit()
-        print(res.summary())
-        print(res.params)
-        save_pickle(f"regression/h{currH}_mapping_coeffs_sq.pickle", res.params)
+def plot_h_ngd_vs_h(currH, c_gd=0.9, 
+                   s_values=np.arange(0.1, 1.0, 0.1), 
+                   h_values=np.arange(0.1, 0.9, 0.1),
+                   mapping_dir="mapping_result",
+                   outfile="plots_fixation/h_ngd_vs_h.pdf"):
+    """
+    For each s in s_values, load the mapping_result/h{h}_grid_fix001_G.pickle
+    files (one per h in h_values), extract H_NGD = mapped_params[1] for key
+    (s, c_gd, h), and plot H_NGD vs h.
+    """
+    plt.figure(figsize=(8,6))
+    color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+    for idx, s_gd in enumerate(s_values):
+        h_ngd_vals = []
+        he_vals = []
+        for h_gd in h_values:
+            h_gd = round(h_gd, 3)
+            p = os.path.join(mapping_dir, f"h{h_gd}_grid_fix001_G.pickle")
+            if not os.path.exists(f"../pickle/{p}"):
+                print(f"no current hval: {h_gd}")
+                return
+
+            grid = load_pickle(p)
+            # grid['map'] maps (s_gd, c_gd, h_gd) → (s_ngd, h_ngd)
+            # sMap = grid.get('map', {})
+            if h_gd == 0.1:
+                print(grid)
+            sMap = grid.get('map', {}) if 'map' in grid else grid 
+
+            key = (round(float(s_gd),3), round(float(c_gd),3), round(float(h_gd),3))
+            if key in sMap:
+                if type(sMap[key]) == dict:
+                    _, h_ngd = sMap[key]['config']
+                else:
+                    _, h_ngd = sMap[key]
+                # se = solve_sngd(s_gd, c_gd, h_gd)[0]
+                he = solve_sngd(s_gd, c_gd, h_gd)[1]
+                # se_vals.append(se)
+                he_vals.append(he)
+            else:
+                h_ngd = np.nan
+                he_vals.append(np.nan)
+            h_ngd_vals.append(h_ngd)
+
+        color = color_cycle[idx % len(color_cycle)]
+        plt.plot(h_values, 
+                 h_ngd_vals, 
+                 marker='o',
+                 color=color,
+                 label=fr"$S_{{GD}}={s_gd:.1f}$", 
+                 ls='--')
+        plt.plot(h_values, he_vals, color=color, marker='x', label=fr"$S_{{GD}}={s_gd:.1f}$ (He)", ls='-')
+
+    plt.xlabel(r"$H_{GD}$", fontsize=14)
+    plt.ylabel(r"$H_{NGD}$", fontsize=14)
+    plt.title(rf"Mapped $H_{{NGD}}$ vs $H_{{GD}}$, $C_{{GD}}={c_gd}$", fontsize=16)
+    plt.legend(title=r"$S_{GD}$", ncol=2, fontsize=10)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(outfile, dpi=600)
+    plt.show()
 
 def test_mapping_trajectory(s_gd, c_gd, h_gd,
                              param_file,
@@ -1140,7 +1295,7 @@ def plot_fixation_surface(currH):
     plt.savefig(f"plots_fixation/3d_surface_hngd_h{currH}.jpg", dpi=600)
     plt.close()
 
-from .solve import solve_sngd
+from .solve import solve_sngd, solve_sngd_unstable
 
 def plot_sngd(currH):
     """
@@ -1295,13 +1450,18 @@ def plot_diff(currH):
     '''
     Plot the difference between mapped and solved s_ngd curves for different configurations
     '''
+    state = "Unstable"
+    plt.rcParams['pdf.fonttype'] = 42  # Ensure text remains text
+    plt.rcParams['ps.fonttype'] = 42
     gd_results = load_pickle(f"gd_simulation_results/h{currH}_allgdres001G.pickle")
     # gradResult = load_pickle(f"h{currH}_hap_gradient_G_fix.pickle") # all gradient results
-    gridResult= load_pickle(f"h{currH}_grid_fix001_G.pickle") # all hap grid results
+    gridResult= load_pickle(f"unstable_mapping_results/h{currH}_unstable_grid.pickle") # all hap grid results
+    print(gridResult)
 
     gd_configs, gd_res = gd_results[0], gd_results[1]
 
-    sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
+    # sMap_grid, wms_grid = gridResult['map'], gridResult['ngC']
+    sMap_grid = gridResult
     # sMap_grad, wms_grad = gradResult['map'], gradResult['ngC']
 
     stabilityRes = load_pickle(f"h{currH}_gametic_stability_res.pickle")
@@ -1314,23 +1474,34 @@ def plot_diff(currH):
         if not math.isclose(h_gd, float(currH)):
             continue
         # only fixation regime
-        if ((s_gd, c_gd, h_gd), 1.0) not in stabilityRes['Fixation']:
+        eq = get_eq({'s': s_gd, 'c': c_gd, 'h': h_gd, 'conversion':'gametic'})['q3']
+        if ((s_gd, c_gd, h_gd), eq) not in stabilityRes[state]:
             continue
         # must exist in grid mapping
         if (s_gd, c_gd, h_gd) not in sMap_grid:
             continue
+        
+        if state == "Fixation":
+        # (a) mapped NGD from simulation (fixation)
+            mapped_s, mapped_h = sMap_grid[(s_gd, c_gd, h_gd)]
+            mapped_curve = wm(mapped_s, mapped_h, 40000, 0.001)['q']
+        
+        elif state == "Unstable":
+        # (a) mapped NGD from simulation (unstable)
+            mapped_s = sMap_grid[(s_gd, c_gd, h_gd)]['config']
+            mapped_curve = sMap_grid[(s_gd, c_gd, h_gd)]['traj']
+        
+        gd_curve=gd_res[(s_gd, c_gd, h_gd)]
+        gd_curve = run_model({'s': s_gd, 'c': c_gd, 'h': h_gd, 'q0':0.001,'target_steps': 40000})['q'][:201]
 
-        # (a) mapped NGD from simulation
-        mapped_s, mapped_h = sMap_grid[(s_gd, c_gd, h_gd)]
-        mapped_curve = wm(mapped_s, mapped_h, 40000, 0.001)['q']
 
         # (b) solved NGD from analytic formula
-        solved_s, solved_h = solve_sngd(s_gd, c_gd, h_gd)
+        solved_s, solved_h = solve_sngd_unstable(s_gd, c_gd, h_gd)
         solved_curve = wm(solved_s, solved_h, 40000, 0.001)['q']
         solved_res[(s_gd, c_gd, h_gd)] = [(solved_s, solved_h), solved_curve]
 
         # trajectory difference
-        diff = euclidean(mapped_curve, solved_curve)
+        diff = euclidean(solved_curve, gd_curve)
         debug = False
 
         ### DEBUGGING SPECIFIC CONFIGURATION ##################
@@ -1355,7 +1526,7 @@ def plot_diff(currH):
         all_c.append(c_gd)
         all_diff.append(diff)
     
-    save_pickle(f"solved_results/solved_res_h{currH}.pickle", solved_res)
+    save_pickle(f"solved_results/{state}solved_res_h{currH}.pickle", solved_res)
     
     # convert to arrays
     all_s = np.array(all_s)
@@ -1367,8 +1538,11 @@ def plot_diff(currH):
 
     # scatter heatmap
     plt.figure(figsize=(8,6))
+    print(all_diff)
+    minval, maxval = np.min(all_diff), np.max(all_diff)
+    maxval = 0.00728 if maxval > 0.00728 else maxval
     print(np.min(all_diff), np.max(all_diff))
-    norm = mcolors.Normalize(vmin=np.min(all_diff), vmax=0.00728)
+    norm = mcolors.Normalize(vmin=minval, vmax=maxval)
     # norm = mcolors.Normalize(vmin=0.0, vmax=0.6)
     sc = plt.scatter(
         all_c, all_s,
@@ -1384,11 +1558,11 @@ def plot_diff(currH):
 
     plt.xlabel('c_GD', fontsize=12)
     plt.ylabel('s_GD', fontsize=12)
-    plt.title(f'Trajectory error: mapped vs analytic NGD (h_GD={currH})', fontsize=14)
+    plt.title(f'Trajectory error: GD vs analytic NGD (h_GD={currH})', fontsize=14)
     plt.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
 
-    outpath = f'plots_diff/diff_heatmap_h{currH}.png'
-    plt.savefig(outpath, dpi=600)
+    outpath = f'plots_diff/{state}_diff_heatmap_h{currH}.pdf'
+    plt.savefig(outpath, format="pdf", dpi=600, bbox_inches='tight')
     plt.show()
     print(f"Plot saved to {outpath}")      

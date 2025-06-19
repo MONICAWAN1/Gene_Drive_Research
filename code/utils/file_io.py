@@ -1,7 +1,7 @@
 import pickle
 import os
 
-PICKLE_DIR = "/Users/wanbo/Desktop/OSG/gene_drive/code/pickle"
+PICKLE_DIR = "../pickle"
 
 def load_pickle(filename):
     filePath = os.path.join(PICKLE_DIR, filename)
